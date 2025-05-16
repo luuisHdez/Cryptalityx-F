@@ -7,9 +7,9 @@ const Home = () => {
     return (
       <div>
         <Header />
-        <main>
-          <Outlet />
-        </main>
+        <main className="pl-10 lg:pl-[60px] xl:pl-[50px] transition-all duration-300">
+  <Outlet />
+</main>
       </div>
     );
   }

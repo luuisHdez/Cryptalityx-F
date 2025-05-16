@@ -8,6 +8,7 @@ html, body, #root {
     margin: 0;
     padding: 0;
     scrollbar-width: none; /* Firefox */
+    background-color: #0b0e11;
   }
   body{
     background-color: black !important;
