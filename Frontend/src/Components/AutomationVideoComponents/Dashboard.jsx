@@ -5,6 +5,7 @@ import { motion } from "framer-motion";
 import Options from "./Options";
 import TeamTable from "./TeamTable";
 import VideoPlayer from "./VideoPlayer";
+import EditOptions from "./EditOptions";
 
 const Dashboard = () => {
   const TARGET_TEXT = "ANÁLISIS DE VIDEOS  WEB SCRAPING";
@@ -14,6 +15,8 @@ const Dashboard = () => {
 
   const intervalRef = useRef(null);
   const [text, setText] = useState(TARGET_TEXT);
+  const [selectedVideo, setSelectedVideo] = useState(null);
+
 
   const scramble = () => {
     let pos = 0;
@@ -72,10 +75,11 @@ const Dashboard = () => {
           <TeamTable />
         </div>
         <div className="w-full h-fit">
-          <VideoPlayer />
+        <EditOptions selectedVideo={selectedVideo} />
         </div>
         <div className="w-full h-fit">
-          <VideoPlayer />
+        <VideoPlayer selectedVideo={selectedVideo} setSelectedVideo={setSelectedVideo} />
+          
         </div>
       </div>
     </div>

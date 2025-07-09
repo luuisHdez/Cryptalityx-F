@@ -33,12 +33,14 @@ const Header = () => {
 
             {/* Botón logout */}
             <div className="ml-auto">
-              <button
-                onClick={handleLogout}
-                className="text-white hover:bg-gray-700 focus:ring-4 focus:ring-gray-600 font-medium rounded-lg text-sm px-4 py-2 focus:outline-none"
-              >
-                Log out
-              </button>
+            <button
+              onClick={handleLogout}
+              className="relative overflow-hidden rounded-lg border border-slate-700 bg-neutral-900 px-3 py-1.5 text-[10px] font-semibold uppercase text-white transition-all duration-200 hover:translate-x-[-2px] hover:translate-y-[-2px] hover:rounded-md hover:shadow-[2px_2px_0px_#1e3a8a] active:translate-x-0 active:translate-y-0 active:rounded-lg active:shadow-none group"
+            >
+              <div className="absolute inset-0 z-0 bg-gradient-to-r from-blue-600 to-blue-800 translate-y-full group-hover:translate-y-0 transition-transform duration-200" />
+              <span className="relative z-10">Log out</span>
+            </button>
+
             </div>
 
             {/* Logo centrado con efecto */}

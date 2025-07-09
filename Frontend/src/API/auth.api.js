@@ -7,6 +7,38 @@ const authApi = axios.create({
     baseURL: 'https://localhost:8000/',
     withCredentials: true  // ✅ Permite el uso de cookies en solicitudes cross-site
 });
+
+export const refreshToken = async () => {
+    try {
+        const response = await authApi.post('token/refresh/');
+        console.log('Nuevo access token:', response.data);
+        return response.data;
+    } catch (error) {
+        console.error('Error al refrescar token:', error);
+        throw error;
+    }
+};
+
+authApi.interceptors.response.use(
+    response => response,
+    async error => {
+        if (error.response?.status === 401) {
+            try {
+                await refreshToken();
+                // Reintenta la solicitud original
+                return authApi(error.config);
+            } catch (refreshError) {
+                console.error("Refresh token falló:", refreshError);
+                window.location.href = "/login";
+            }
+        }
+        return Promise.reject(error);
+    }
+);
+
+
+
+
 // 📌 Obtiene el token CSRF
 export const fetchCSRFToken = async () => {
     try {
@@ -110,4 +142,6 @@ export const googleLogin = async (code) => {
         }
     }
 };
+
+
 

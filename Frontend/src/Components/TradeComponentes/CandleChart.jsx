@@ -10,21 +10,25 @@ const TOOL_COLORS = {
   alert_down: "purple",
 };
 
-const CandleChart = ({ data, toolStates, setToolStates }) => {
+const CandleChart = ({ data, toolStates, setToolStates, onLoadMore }) => {
   const chartContainerRef = useRef(null);
   const chartInstance = useRef(null);
   const candlestickSeries = useRef(null);
   const linesRef = useRef({});
-  const legendContentRef = useRef(null); // ✅ nuevo ref para leyenda
+  const legendContentRef = useRef(null);
   const lastCandleRef = useRef(null);
-  const isHoveringRef = useRef(false);
-  
+  const earliestLoadedTimeRef = useRef(null);
+  const isLoadingMoreRef = useRef(false);
+  const onLoadMoreRef = useRef(onLoadMore);
 
-  // Crear gráfico
+  // Mantener referencia estable de onLoadMore
+  useEffect(() => { onLoadMoreRef.current = onLoadMore; }, [onLoadMore]);
+
+  // Crear gráfico y leyenda
   useEffect(() => {
     if (!chartContainerRef.current) return;
 
-    chartInstance.current = createChart(chartContainerRef.current, {
+    const chart = createChart(chartContainerRef.current, {
       width: chartContainerRef.current.clientWidth,
       height: chartContainerRef.current.clientHeight,
       layout: {
@@ -33,250 +37,146 @@ const CandleChart = ({ data, toolStates, setToolStates }) => {
         fontSize: 12,
         fontFamily: "'Inter', sans-serif",
       },
-      grid: {
-        vertLines: { color: "#1e2026" },
-        horzLines: { color: "#1e2026" },
-      },
+      grid: { vertLines: { color: "#1e2026" }, horzLines: { color: "#1e2026" } },
       crosshair: { mode: CrosshairMode.Normal },
       timeScale: {
-        timeVisible: true,
-        borderColor: "#3a3a3a",
-        barSpacing: 10,
-      },
+           timeVisible: true,
+           borderColor: "#3a3a3a",
+           barSpacing: 10,
+           handleScroll: {
+             mouseWheel: true,
+             pressedMouseMove: true,
+           },
+         },
     });
+    chartInstance.current = chart;
 
-    candlestickSeries.current = chartInstance.current.addSeries(CandlestickSeries, {
+    candlestickSeries.current = chart.addSeries(CandlestickSeries, {
       upColor: "#0ecb81",
       downColor: "#f6465d",
       borderVisible: false,
       wickUpColor: "#0ecb81",
       wickDownColor: "#f6465d",
-      priceFormat: {
-        type: "price",
-        precision: 4,
-        minMove: 0.0001,
-      },
+      priceFormat: { type: "price", precision: 4, minMove: 0.0001 },
     });
 
-    // ResizeObserver
+    // Resize
     const resizeObserver = new ResizeObserver(() => {
-      if (chartInstance.current && chartContainerRef.current) {
-        chartInstance.current.applyOptions({
-          width: chartContainerRef.current.clientWidth,
-          height: chartContainerRef.current.clientHeight,
-        });
-      }
+      chart.applyOptions({
+        width: chartContainerRef.current.clientWidth,
+        height: chartContainerRef.current.clientHeight,
+      });
     });
-
     resizeObserver.observe(chartContainerRef.current);
 
-    // Leyenda
+    // Leyenda contenedor
     const legendContainer = document.createElement("div");
     legendContainer.className =
-      "absolute top-0 left-0 w-full z-50 bg-[#131722] text-white text-xs px-4 py-2 flex items-center gap-4 transition-all duration-300";
+      "absolute top-0 left-0 w-full z-50 bg-[#131722] text-white text-xs px-4 py-2 flex items-center gap-4";
     legendContainer.style.height = "24px";
+    chartContainerRef.current.appendChild(legendContainer);
 
+    // Botón toggler de leyenda
     const toggleButton = document.createElement("div");
-    toggleButton.innerHTML = `
-      <svg class="legend-toggle-icon w-[16px] h-[16px] transition-transform duration-300" viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg">
-        <path fill-rule="evenodd" clip-rule="evenodd"
-          d="M7.92656 8.11751L10.5192 5.52486L11.6977 6.70337L7.92648 10.4746L6.74797 9.2961L6.74805 9.29602L4.15527 6.70325L5.33378 5.52474L7.92656 8.11751Z"
-          fill="#929AA5"
-        ></path>
-      </svg>
-    `;
+    toggleButton.innerHTML = `<svg class=\"w-4 h-4\" viewBox=\"0 0 16 16\"><path fill=\"#929AA5\" d=\"M7.9 8.1L10.5 5.5 11.7 6.7 7.9 10.4 6.7 9.3 4.2 6.7 5.3 5.5z\"/></svg>`;
     toggleButton.style.cursor = "pointer";
     toggleButton.className = "flex items-center justify-center mr-2";
+    legendContainer.appendChild(toggleButton);
 
+    // Contenido
     const legendContent = document.createElement("div");
     legendContent.className = "flex gap-4 overflow-hidden";
     legendContent.innerHTML = `
-      <div id="legend-time"> <span class="legend-val">-</span></div>
-      <div id="legend-open">OPEN: <span class="legend-val">-</span></div>
-      <div id="legend-high">HIGH: <span class="legend-val">-</span></div>
-      <div id="legend-low">LOW: <span class="legend-val">-</span></div>
-      <div id="legend-close">CLOSE: <span class="legend-val">-</span></div>
+      <div id=\"legend-time\"><span>-</span></div>
+      <div id=\"legend-open\">OPEN: <span>-</span></div>
+      <div id=\"legend-high\">HIGH: <span>-</span></div>
+      <div id=\"legend-low\">LOW: <span>-</span></div>
+      <div id=\"legend-close\">CLOSE: <span>-</span></div>
     `;
+    legendContainer.appendChild(legendContent);
     legendContentRef.current = legendContent;
 
-    legendContainer.appendChild(toggleButton);
-    legendContainer.appendChild(legendContent);
-    chartContainerRef.current.appendChild(legendContainer);
-
-    let isExpanded = false;
+    let expanded = false;
     toggleButton.onclick = () => {
-      isExpanded = !isExpanded;
-      toggleButton.querySelector("svg").style.transform = isExpanded ? "rotate(180deg)" : "rotate(0deg)";
-      legendContent.style.display = isExpanded ? "none" : "flex";
+      expanded = !expanded;
+      legendContent.style.display = expanded ? "none" : "flex";
     };
 
-    // Crosshair
-    chartInstance.current.subscribeCrosshairMove(param => {
-      const candleData = param?.seriesData?.get(candlestickSeries.current);
-      const time = param?.time;
-    
-      const updateLegend = ({ open, high, low, close, time: candleTime }) => {
-        const date = new Date(candleTime * 1000);
-        const formatted = date.toLocaleString("sv-SE", {
-          year: "numeric",
-          month: "2-digit",
-          day: "2-digit",
-          hour: "2-digit",
-          minute: "2-digit",
-          hour12: false,
-          timeZone: "UTC",
+    // Crosshair move
+    chart.subscribeCrosshairMove(param => {
+      const cd = param?.seriesData?.get(candlestickSeries.current);
+      if (!cd) return;
+      const ts = typeof param.time === "number" ? param.time : param.time.timestamp;
+      const dataPoint = { open: cd.open, high: cd.high, low: cd.low, close: cd.close, time: ts };
+      const date = new Date(ts * 1000).toLocaleString("sv-SE", { timeZone: "UTC" });
+      const color = cd.close > cd.open ? "#0ecb81" : cd.close < cd.open ? "#f6465d" : "#eaecef";
+      if (legendContentRef.current) {
+        legendContentRef.current.querySelector("#legend-time span").textContent = date;
+        ["open","high","low","close"].forEach(name => {
+          const el = legendContentRef.current.querySelector(`#legend-${name} span`);
+          el.textContent = cd[name]; el.style.color = name !== "time" ? color : undefined;
         });
-    
-        const color = close > open ? "#0ecb81" : close < open ? "#f6465d" : "#eaecef";
-    
-        if (legendContentRef.current) {
-          const timeEl = legendContentRef.current.querySelector("#legend-time");
-          if (timeEl) timeEl.textContent = `${formatted}`;
-    
-          const openEl = legendContentRef.current.querySelector("#legend-open .legend-val");
-          if (openEl) openEl.textContent = open;
-    
-          const highEl = legendContentRef.current.querySelector("#legend-high .legend-val");
-          if (highEl) highEl.textContent = high;
-    
-          const lowEl = legendContentRef.current.querySelector("#legend-low .legend-val");
-          if (lowEl) lowEl.textContent = low;
-    
-          const closeEl = legendContentRef.current.querySelector("#legend-close .legend-val");
-          if (closeEl) closeEl.textContent = close;
-    
-          ["#legend-open", "#legend-high", "#legend-low", "#legend-close"].forEach(id => {
-            const el = legendContentRef.current.querySelector(`${id} .legend-val`);
-            if (el) el.style.color = color;
-          });
-        }
-      };
-    
-      if (!isHoveringRef.current) {
-        if (lastCandleRef.current) updateLegend(lastCandleRef.current);
-        return;
       }
-      
-      if (!param?.point || !time || !candleData) return;
-    
-      // ✅ Renombramos para evitar conflicto con `open`, `high`, etc.
-      const candleOpen = candleData.open;
-      const candleHigh = candleData.high;
-      const candleLow = candleData.low;
-      const candleClose = candleData.close;
-      const timestamp = typeof time === "number" ? time : time.timestamp;
-    
-      updateLegend({
-        open: candleOpen,
-        high: candleHigh,
-        low: candleLow,
-        close: candleClose,
-        time: timestamp,
-      });
     });
-    const container = chartContainerRef.current;
-    const handleEnter = () => { isHoveringRef.current = true };
-    const handleLeave = () => { isHoveringRef.current = false };
-
-    container.addEventListener("mouseenter", handleEnter);
-    container.addEventListener("mouseleave", handleLeave);
-    
 
     return () => {
       resizeObserver.disconnect();
-      container.removeEventListener("mouseenter", handleEnter);
-      container.removeEventListener("mouseleave", handleLeave);
-      chartInstance.current?.remove();
-      chartInstance.current = null;
-      candlestickSeries.current = null;
+      chart.remove();
     };
   }, []);
 
-  // Setear datos
+  // Actualiza earliestLoadedTime al cambiar datos
   useEffect(() => {
-    if (!data || data.length === 0 || !candlestickSeries.current) return;
+    if (data?.length) earliestLoadedTimeRef.current = data[0].time;
+  }, [data]);
 
+  // Scroll hacia atrás -> carga más datos
+  // -- scroll hacia atrás para cargar más datos --
+  useEffect(() => {
+      const chart = chartInstance.current;
+      if (!chart) return;
+      const timeScale = chart.timeScale();
+    
+      // solo dispara cuando 'from' llega a 0 (el primer candle)
+      const handler = ({ from }) => {
+        if (from <= 0 && !isLoadingMoreRef.current) {
+          isLoadingMoreRef.current = true;
+          onLoadMoreRef.current(earliestLoadedTimeRef.current)
+            .finally(() => { isLoadingMoreRef.current = false; });
+        }
+      };
+    
+      timeScale.subscribeVisibleLogicalRangeChange(handler);
+      return () => {
+        timeScale.unsubscribeVisibleLogicalRangeChange(handler);
+      };
+    }, []);
+
+  // Renderiza velas
+  useEffect(() => {
+    if (!data || !candlestickSeries.current) return;
     candlestickSeries.current.setData(data);
-
-    const last = data[data.length - 1];
-
-    if (last) {
-      lastCandleRef.current = last;
-
-      if (!isHoveringRef.current) {
-      const date = new Date(last.time * 1000);
-      const formatted = date.toLocaleString("sv-SE", {
-        year: "numeric",
-        month: "2-digit",
-        day: "2-digit",
-        hour: "2-digit",
-        minute: "2-digit",
-        hour12: false,
-        timeZone: "UTC",
-      });
-
-      const color = last.close > last.open ? "#0ecb81" : last.close < last.open ? "#f6465d" : "#eaecef";
-
-      if (legendContentRef.current) {
-        const timeEl = legendContentRef.current.querySelector("#legend-time");
-        if (timeEl) timeEl.textContent = `${formatted}`;
-      
-        const openEl = legendContentRef.current.querySelector("#legend-open .legend-val");
-        if (openEl) openEl.textContent = last.open;
-      
-        const highEl = legendContentRef.current.querySelector("#legend-high .legend-val");
-        if (highEl) highEl.textContent = last.high;
-      
-        const lowEl = legendContentRef.current.querySelector("#legend-low .legend-val");
-        if (lowEl) lowEl.textContent = last.low;
-      
-        const closeEl = legendContentRef.current.querySelector("#legend-close .legend-val");
-        if (closeEl) closeEl.textContent = last.close;
-      
-        ["#legend-open", "#legend-high", "#legend-low", "#legend-close"].forEach(id => {
-          const el = legendContentRef.current.querySelector(`${id} .legend-val`);
-          if (el) el.style.color = color;
-        });
-      }
-    }
-  }
-}, [data]);
+    lastCandleRef.current = data[data.length - 1];
+  }, [data]);
 
   // Líneas dinámicas
   useEffect(() => {
-    if (!candlestickSeries.current || data.length === 0) return;
-
-    Object.entries(toolStates).forEach(([tool, { visible, value }]) => {
-      if ((!visible || !value) && linesRef.current[tool]) {
+    if (!candlestickSeries.current) return;
+    Object.entries(toolStates).forEach(([tool,{visible,value}]) => {
+      if ((!visible||!value)&&linesRef.current[tool]){
         candlestickSeries.current.removePriceLine(linesRef.current[tool]);
-        linesRef.current[tool] = null;
-        return;
-      }
-
-      if (visible && value) {
-        const price = value;
+        linesRef.current[tool]=null;
+      } else if (visible&&value) {
         if (!linesRef.current[tool]) {
-          linesRef.current[tool] = candlestickSeries.current.createPriceLine({
-            price,
-            color: TOOL_COLORS[tool],
-            lineWidth: 3,
-            lineStyle: 0,
-            axisLabelVisible: true,
-            title: tool.replace("_", " "),
-          });
+          linesRef.current[tool] = candlestickSeries.current.createPriceLine({ price:value, color:TOOL_COLORS[tool], lineWidth:3, lineStyle:0, axisLabelVisible:true, title:tool});
         } else {
-          linesRef.current[tool].applyOptions({ price });
+          linesRef.current[tool].applyOptions({ price:value });
         }
       }
     });
-  }, [toolStates, data]);
+  }, [toolStates,data]);
 
-  return (
-    <div
-      ref={chartContainerRef}
-      className="w-full h-[400px] relative z-10 bg-[var(--color-BasicBg)]"
-    />
-  );
+  return <div ref={chartContainerRef} className="w-full h-[400px] relative" />;
 };
 
 export default CandleChart;

@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from "react";
-import { FiChevronUp, FiChevronDown } from "react-icons/fi";
-import { FaMedal } from "react-icons/fa";
+import { uploadToS3ByFilename } from "../../APIAutomation/VideoAPI";
 import { fetchDBVideos } from "../../APIAutomation/VideoAPI";
+import { toast } from "react-toastify";
 
 // --- Funciones para guardar/leer localStorage con expiración ---
 const setWithExpiry = (key, value, ttlMinutes = 10) => {
@@ -31,6 +31,9 @@ const getWithExpiry = (key) => {
   }
 };
 
+
+
+
 // --- Estilos para el estado ---
 const getStatusStyle = (status) => {
   const base = "px-2 py-0.5 text-xs font-medium rounded whitespace-nowrap ";
@@ -52,7 +55,6 @@ const TeamTable = () => {
   const [page, setPage] = useState(0);
   const [perPage, setPerPage] = useState(10);
 
-  // Cargar filtro desde localStorage (si no expiró)
   useEffect(() => {
     const savedFiltro = getWithExpiry("estadoFiltro");
     if (savedFiltro) {
@@ -60,7 +62,22 @@ const TeamTable = () => {
     }
   }, []);
 
-  // Cargar datos
+  const handleUpload = async (filename, idVideo) => {
+    try {
+      const result = await uploadToS3ByFilename(filename, idVideo); // se manda también el id
+  
+      console.log("✅ Video subido:", result);
+      toast.success("✅ Video subido correctamente a S3");
+  
+      const updated = await fetchDBVideos();
+      setVideos(updated);
+    } catch (error) {
+      console.error("❌ Error al subir a S3:", error.message);
+      toast.error("❌ Error al subir video a S3");
+    }
+  };
+  
+
   useEffect(() => {
     const load = async () => {
       try {
@@ -73,10 +90,23 @@ const TeamTable = () => {
     load();
   }, []);
 
+
+  const recargarTabla = async () => {
+    try {
+      const data = await fetchDBVideos();
+      setVideos(data);
+      toast.success("🔄 Tabla actualizada");
+    } catch (error) {
+      console.error("❌ Error al recargar videos:", error.message);
+      toast.error("❌ Error al recargar la tabla");
+    }
+  };
+  
+
   const handleFiltroChange = (e) => {
     const nuevoEstado = e.target.value;
     setEstadoFiltro(nuevoEstado);
-    setWithExpiry("estadoFiltro", nuevoEstado); // ✅ guarda con expiración
+    setWithExpiry("estadoFiltro", nuevoEstado);
     setPage(0);
   };
 
@@ -109,19 +139,28 @@ const TeamTable = () => {
           registros
         </label>
 
-        <label className="text-xs text-gray-400">
-          Estado{" "}
-          <select
-            value={estadoFiltro}
-            onChange={handleFiltroChange}
-            className="bg-neutral-800 border border-gray-600 text-white px-1 py-0.5 text-xs rounded ml-2"
-          >
-            <option value="todos">Todos</option>
-            <option value="pendiente">Pendiente</option>
-            <option value="descargado">Descargado</option>
-            <option value="subido">Subido</option>
-          </select>
-        </label>
+        <label className="text-xs text-gray-400 flex items-center gap-1">
+  Estado{" "}
+  <select
+    value={estadoFiltro}
+    onChange={handleFiltroChange}
+    className="bg-neutral-800 border border-gray-600 text-white px-1 py-0.5 text-xs rounded ml-2"
+  >
+    <option value="todos">Todos</option>
+    <option value="pendiente">Pendiente</option>
+    <option value="descargado">Descargado</option>
+    <option value="subido">Subido</option>
+    <option value="modificado">Modificado</option>
+    <option value="Publicado">Publicado</option>
+  </select>
+  <button
+    onClick={recargarTabla}
+    className="ml-2 px-2 py-0.5 text-xs border border-blue-500 rounded text-blue-400 hover:bg-blue-800 transition"
+  >
+    ↻
+  </button>
+</label>
+
 
         <div className="text-xs text-gray-400">
           Página {page + 1} de {totalPages}
@@ -130,75 +169,93 @@ const TeamTable = () => {
 
       {/* Tabla */}
       <div className="overflow-y-auto max-h-[280px] min-h-[280px]">
-        <table className="min-w-[600px] w-full table-fixed text-left text-[11px]">
-          <thead>
-            <tr className="text-xs text-gray-400 uppercase border-b border-gray-700">
-              <th className="w-10 px-2 py-2"></th>
-              <th className="w-2/5 px-2 py-2">Video URL</th>
-              <th className="w-1/5 px-2 py-2">Origen</th>
-              <th className="w-1/5 px-2 py-2">Estado</th>
-              <th className="w-1/5 px-2 py-2">Publicado</th>
-            </tr>
-          </thead>
-          <tbody>
-            {paginated.map((video, i) => (
-              <tr
-                key={video.id}
-                className={`${
-                  i % 2 === 0 ? "bg-neutral-800" : "bg-neutral-900"
-                } text-xs`}
-              >
-                <td className="px-2 py-2 text-gray-400 text-base">
-                  <div className="flex flex-col items-center">
-                    <FiChevronUp className="hover:text-blue-400 cursor-pointer" />
-                    <FiChevronDown className="hover:text-blue-400 cursor-pointer" />
-                  </div>
-                </td>
-                <td className="px-2 py-2 truncate">
-                  <p className="font-medium text-white truncate break-all">
-                    {video.url}
-                  </p>
-                  <p className="text-[11px] text-gray-400 truncate">
-                    {video.profile}
-                  </p>
-                </td>
-                <td className="px-2 py-2 font-medium text-blue-400 flex items-center gap-1 capitalize">
-                  {video.origen}
-                  {video.origen === "instagram" && (
-                    <FaMedal className="text-pink-400 text-[10px]" />
-                  )}
-                </td>
-                <td className="px-2 py-2">
-                  <span className={getStatusStyle(video.estado)}>
-                    {video.estado}
-                  </span>
-                </td>
-                <td className="px-2 py-2 text-white text-[11px]">
-                  {video.fecha_publicado
-                    ? new Date(video.fecha_publicado).toLocaleDateString()
-                    : "—"}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+      <table className="min-w-[600px] w-full table-fixed text-left text-[10px]">
+  <thead>
+    <tr className="text-[10px] text-gray-400 uppercase border-b border-gray-700">
+      <th className="w-3/5 px-2 py-1">Video URL</th>
+      <th className="w-1/5 px-2 py-1">Origen</th>
+      <th className="w-1/5 px-2 py-1">Estado</th>
+      <th className="w-1/5 px-2 py-1">Publicado</th>
+      <th className="w-1/5 px-2 py-1">Acción</th>
+    </tr>
+  </thead>
+  <tbody>
+    {paginated.map((video, i) => (
+      <tr
+        key={video.id}
+        className={`${
+          i % 2 === 0 ? "bg-neutral-800" : "bg-neutral-900"
+        } text-[10px]`}
+      >
+        <td className="px-2 py-1 truncate">
+          <p className="font-medium text-white text-[9px] truncate break-all">
+            {video.url}
+          </p>
+          <p className="px-2 text-[10px] text-gray-400 truncate">
+            {video.profile}
+          </p>
+        </td>
+        <td className="px-2 py-1 font-medium text-blue-400 flex items-center gap-1 capitalize">
+          {video.origen}
+        </td>
+        <td className="px-2 py-1">
+          <span className={getStatusStyle(video.estado)}>
+            {video.estado}
+          </span>
+        </td>
+        <td className="px-2 py-1 text-white text-[10px]">
+          {video.fecha_publicado
+            ? new Date(video.fecha_publicado).toLocaleDateString()
+            : "—"}
+        </td>
+        <td className="px-2 py-1">
+        <button
+          disabled={video.estado !== "descargado"}
+          onClick={() => {
+            const parts = video.url.split("/");
+            const lastPart = parts.filter(Boolean).pop(); // elimina vacíos y toma el último
+            const filename = `${lastPart}`;
+            handleUpload(filename, video.id);
+          }}
+          className={`relative overflow-hidden rounded text-[10px] font-medium px-2 py-1 transition ${
+            video.estado === "descargado"
+              ? "border border-slate-700 bg-neutral-900 text-white group hover:translate-x-[-2px] hover:translate-y-[-2px] hover:rounded-md hover:shadow-[2px_2px_0px_#166534] active:translate-x-0 active:translate-y-0 active:rounded group"
+              : "bg-gray-700 text-gray-400 cursor-not-allowed"
+          }`}
+        >
+          {video.estado === "descargado" && (
+            <div className="absolute inset-0 z-0 bg-gradient-to-r from-green-400 to-green-800 translate-y-full group-hover:translate-y-0 transition-transform duration-200" />
+
+
+          )}
+          <span className="relative z-10">Cargar a S3</span>
+        </button>
+        </td>
+      </tr>
+    ))}
+  </tbody>
+</table>
+
       </div>
 
       {/* Footer */}
       <div className="flex justify-between items-center px-2 py-1 bg-neutral-800 border-t border-slate-700">
         <button
           onClick={() => setPage((p) => Math.max(0, p - 1))}
-          className="text-xs text-blue-400 hover:underline disabled:text-gray-500"
           disabled={page === 0}
+          className="relative overflow-hidden rounded-lg border border-slate-700 bg-neutral-900 px-3 py-1.5 text-[10px] font-semibold uppercase text-white transition-all duration-200 hover:translate-x-[-2px] hover:translate-y-[-2px] hover:rounded-md hover:shadow-[2px_2px_0px_#1e3a8a] active:translate-x-0 active:translate-y-0 active:rounded-lg active:shadow-none disabled:opacity-50 disabled:cursor-not-allowed group"
         >
-          Anterior
+          <div className="absolute inset-0 z-0 bg-gradient-to-r from-blue-500 to-blue-800 translate-y-full group-hover:translate-y-0 transition-transform duration-200" />
+          <span className="relative z-10">Anterior</span>
         </button>
+
         <button
           onClick={() => setPage((p) => Math.min(totalPages - 1, p + 1))}
-          className="text-xs text-blue-400 hover:underline disabled:text-gray-500"
           disabled={page >= totalPages - 1}
+          className="relative overflow-hidden rounded-lg border border-slate-700 bg-neutral-900 px-3 py-1.5 text-[10px] font-semibold uppercase text-white transition-all duration-200 hover:translate-x-[-2px] hover:translate-y-[-2px] hover:rounded-md hover:shadow-[2px_2px_0px_#1e3a8a] active:translate-x-0 active:translate-y-0 active:rounded-lg active:shadow-none disabled:opacity-50 disabled:cursor-not-allowed group"
         >
-          Siguiente
+          <div className="absolute inset-0 z-0 bg-gradient-to-r from-blue-500 to-blue-800 translate-y-full group-hover:translate-y-0 transition-transform duration-200" />
+          <span className="relative z-10">Siguiente</span>
         </button>
       </div>
     </div>

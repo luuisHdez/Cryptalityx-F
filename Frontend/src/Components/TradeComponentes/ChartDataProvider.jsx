@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from "react";
-import { fetchHistoricalData } from "../../API/APIService";
+import React, { useState, useEffect, useCallback } from "react";
+import { fetchHistoricalData, fetchUpdatedData } from "../../API/APIService";
 import ChartControls from "./ChartControls";
 import CandleChart from "./CandleChart";
 import ToolInput from "./ToolInput";
@@ -29,31 +29,33 @@ const ChartDataProvider = ({ symbol, interval, setSymbol, setInterval, operation
   const location = useLocation();
 
   useEffect(() => {
-    let isMounted = true;
-    setHasFetched(false);
-    setLoading(true);
+  if (!symbol || !interval) return;
 
-    const loadHistoricalData = async () => {
-      try {
-        const data = await fetchHistoricalData(symbol, interval);
-        if (!isMounted) return;
-        setCandles(data || []);
-        setHasFetched(true);
-      } catch (err) {
-        console.error("⚠️ Error al obtener datos históricos:", err);
-        setCandles([]);
-        setError("Error al cargar datos históricos.");
-        setHasFetched(true);
-      } finally {
-        if (isMounted) setLoading(false);
-      }
-    };
+  let isMounted = true;
+  setLoading(true);
+  setHasFetched(false);
 
-    loadHistoricalData();
-    return () => {
-      isMounted = false;
-    };
-  }, [symbol, interval]);
+  const loadAndUpdate = async () => {
+    try {
+      const updated = await fetchUpdatedData(symbol, interval);
+      if (!isMounted) return;
+      setCandles(updated || []);
+      setHasFetched(true);
+    } catch (err) {
+      console.error("❌ Error al cargar datos actualizados", err);
+      setCandles([]);
+      setError("Error al cargar datos.");
+      setHasFetched(true);
+    } finally {
+      if (isMounted) setLoading(false);
+    }
+  };
+
+  loadAndUpdate();
+  return () => {
+    isMounted = false;
+  };
+}, [symbol, interval]);
 
 
   useEffect(() => {
@@ -95,7 +97,11 @@ const ChartDataProvider = ({ symbol, interval, setSymbol, setInterval, operation
     // Actualización de operación
     if (message?.status === "closed") {
       console.log("❌ Operación cerrada. Limpiando valores.");
-      setToolStates({ ...INITIAL_TOOL_STATES });
+      setToolStates((prev) => ({
+    ...INITIAL_TOOL_STATES,
+    AU: { ...prev.AU, visible: true },
+    AD: { ...prev.AD, visible: true },
+  }));
 
     } else if (message?.status === "active") {
       console.log("📩 Actualización de operación activa:", message);
@@ -147,7 +153,11 @@ useEffect(() => {
   console.log("📩 operation_activated received:", operationConfig);
 
   if (operationConfig.status === "closed") {
-    setToolStates({ ...INITIAL_TOOL_STATES }); // 🔧 Resetea todo correctamente
+    setToolStates({ ...INITIAL_TOOL_STATES });setToolStates((prev) => ({
+    ...INITIAL_TOOL_STATES,
+    AU: { ...prev.AU, visible: true },
+    AD: { ...prev.AD, visible: true },
+  })); // 🔧 Resetea todo correctamente
   } else {
     setToolStates((prev) => ({
       ...prev,
@@ -186,7 +196,23 @@ useEffect(() => {
   }
 }, [operationConfig]);
 
-  
+const handleLoadMoreData = useCallback(async (beforeTime) => {
+  // Ajustamos el timestamp añadiendo 6h (3600 s × 6)
+  const adjustedBefore = beforeTime + 6 * 3600;
+  console.log("🔔 handleLoadMoreData llamado con beforeTime=", beforeTime, "→ adjustedBefore=", adjustedBefore);
+  try {
+    const newData = await fetchHistoricalData(symbol, interval, adjustedBefore);
+    if (newData && newData.length > 0) {
+      setCandles(prev => [...newData, ...prev]);
+    } else {
+      console.log("📭 No se encontraron más datos históricos.");
+    }
+  } catch (error) {
+    console.error("❌ Error al cargar más datos históricos:", error);
+  }
+}, [symbol, interval]);
+
+
   
   return (
     <div className="relative">
@@ -239,6 +265,7 @@ useEffect(() => {
             data={candles}
             toolStates={toolStates}
             setToolStates={setToolStates}
+            onLoadMore={handleLoadMoreData} 
           />
         </div>
         )}
@@ -299,6 +326,7 @@ useEffect(() => {
             data={candles}
             toolStates={toolStates}
             setToolStates={setToolStates}
+            onLoadMore={handleLoadMoreData} 
           />
         </div>
         )}

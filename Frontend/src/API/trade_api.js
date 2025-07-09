@@ -7,6 +7,22 @@ const socket = io("http://localhost:8001", {
   autoConnect: false, // 🔧 Requiere llamada explícita a .connect()
   withCredentials: true
 });
+// 🔁 Reintento automático si el JWT está expirado
+import { refreshToken } from "../API/auth.api"; // asegúrate que esto ya existe
+
+socket.on("connect_error", async (err) => {
+  if (err?.reason === "token expired") {
+    console.warn("⚠️ JWT expirado. Intentando refrescar...");
+    try {
+      await refreshToken();     // intenta refrescar el token
+      socket.connect();         // reconecta automáticamente
+    } catch (e) {
+      console.error("❌ Falló refreshToken tras expiración:", e);
+      window.location.href = "/login";  // fuerza login si falla
+    }
+  }
+});
+
 
 // Conecta si no está conectado
 export const connectSocket = () => {

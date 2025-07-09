@@ -169,7 +169,6 @@ const ChartControls = ({
       }
   
       const values = {
-        EPt: toolStates.EPt?.value,
         AU: toolStates.AU?.value,
         AD: toolStates.AD?.value,
       };
@@ -200,12 +199,12 @@ const ChartControls = ({
       });
       console.log("✅ Config enviada:", result);
   
-      setToolStates(prev => ({
+      /*setToolStates(prev => ({
         ...prev,
         TK: { ...prev.TK, value: 0, visible: false },
         SL: { ...prev.SL, value: 0, visible: false },
         TB: { ...prev.TB, value: 0, visible: false },
-      }));
+      }));*/
     } catch (error) {
       toast.error("❌ Fallo al enviar configuración.", {
         theme: "dark",
