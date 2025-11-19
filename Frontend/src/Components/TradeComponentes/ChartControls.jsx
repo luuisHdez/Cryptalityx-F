@@ -1,15 +1,10 @@
 import React, { useState } from "react";
-import { updateBinanceData, fetchHistoricalData, submitOperationConfig } from "../../API/APIService";
-import {ToastContainer, toast } from 'react-toastify'
-
-const TOOL_COLORS = {
-  stop_loss: "bg-red-500",
-  take_profit: "bg-green-500",
-  entry_point: "bg-blue-500",
-  take_benefit: "bg-blue-300",
-  alert_up: "bg-orange-500",
-  alert_down: "bg-purple-500",
-};
+import {
+  updateBinanceData, fetchHistoricalData,
+  submitOperationConfig, stopOperation, buyOrder,
+  sellOrder
+} from "../../API/APIService";
+import { toast } from 'react-toastify'
 
 const ChartControls = ({
   setCandles,
@@ -23,9 +18,7 @@ const ChartControls = ({
   const [filters, setFilters] = useState({
     start_date: "",
     end_date: "",
-    crypto: "",
   });
-  
 
   const handleSymbolChange = (e) => {
     setCandles([]);
@@ -55,15 +48,15 @@ const ChartControls = ({
       const result = await updateBinanceData(
         filters.start_date,
         filters.end_date,
-        filters.crypto
+        symbol
       );
       console.log("✅ Datos actualizados:", result);
-  
+
       // Si el update fue exitoso y hay cripto + intervalos válidos, recarga gráfica
-      if (filters.crypto && interval) {
-        const updatedData = await fetchHistoricalData(filters.crypto, interval);
+      if (symbol && interval) {
+        const updatedData = await fetchHistoricalData(symbol, interval);
         setCandles(updatedData);
-        setSymbol(filters.crypto); // opcional: sincroniza visualmente
+        setSymbol(symbol); // opcional: sincroniza visualmente
       }
     } catch (error) {
       console.error("❌ Error en la petición:", error);
@@ -72,13 +65,13 @@ const ChartControls = ({
 
 
   return (
-    <div className="flex flex-col gap-2 text-xs px-2 mt-1 mb-1">
+    <div className="flex flex-wrap items-center justify-center gap-1 text-xs px-1 mt-2 mb-1">
       {/* Selects y switches */}
-      <div className="flex flex-wrap items-center gap-2">
+      <div className="flex flex-wrap items-center gap-1">
         <select
           value={symbol}
           onChange={handleSymbolChange}
-          className="min-w-[90px] bg-gray-800 text-white border border-gray-600 rounded px-2 py-1"
+          className="min-w-[90px] bg-gray-800 text-white border border-blue-700 rounded px-1 py-0.5"
         >
           <option value="xrpusdt">XRP/USDT</option>
           <option value="btcusdt">BTC/USDT</option>
@@ -88,7 +81,7 @@ const ChartControls = ({
         <select
           value={interval}
           onChange={handleIntervalChange}
-          className="min-w-[70px] bg-gray-800 text-white border border-gray-600 rounded px-2 py-1"
+          className="min-w-[50px] bg-gray-800 text-white border border-blue-700 rounded px-1 py-1"
         >
           <option value="1m">1m</option>
           <option value="5m">5m</option>
@@ -98,123 +91,184 @@ const ChartControls = ({
         </select>
 
         <div className="flex items-center space-x-1">
-          <label className="text-white">Activar EPt, AU y AD</label>
+          <label className="text-white">Alerts</label>
           <button
             onClick={() =>
               setToolStates(prev => ({
                 ...prev,
-                activeOperation: !prev.activeOperation,
+                active_alerts: !prev.active_alerts,
               }))
             }
-            className={`w-8 h-4 flex items-center rounded-full p-0.5 ${
-              toolStates.activeOperation ? "bg-green-500" : "bg-gray-400"
-            }`}
+            className={`w-8 h-4 flex items-center rounded-full p-0.5 ${toolStates.active_alerts ? "bg-green-500" : "bg-gray-400"
+              }`}
           >
             <div
-              className={`w-3 h-3 bg-white rounded-full transform transition ${
-                toolStates.activeOperation ? "translate-x-4" : "translate-x-0"
+              className={`w-3 h-3 bg-white rounded-full transform transition ${toolStates.active_alerts ? "translate-x-4" : "translate-x-0"
+                }`}
+            />
+          </button>
+        </div>
+        <div className="flex items-center space-x-1">
+          <label className="text-white">Operations</label>
+          <button
+            onClick={() =>
+              setToolStates(prev => ({
+                ...prev,
+                active_operations: !prev.active_operations,
+              }))
+            }
+            className={`w-8 h-4 flex items-center rounded-full p-0.5 ${toolStates.active_operations ? "bg-blue-500" : "bg-gray-400"
               }`}
+          >
+            <div
+              className={`w-3 h-3 bg-white rounded-full transform transition ${toolStates.active_operations ? "translate-x-4" : "translate-x-0"
+                }`}
             />
           </button>
         </div>
       </div>
 
-      {/* Mini formulario de filtros */}
       <form
         onSubmit={handleFilterSubmit}
-        className="flex flex-wrap items-center gap-2"
+        className="flex flex-wrap items-center gap-1"
       >
         <input
           type="date"
           name="start_date"
           value={filters.start_date}
           onChange={handleFilterChange}
-          className="bg-gray-800 text-white border border-gray-600 rounded px-2 py-1"
+          className="bg-gray-800 text-white border border-blue-700 rounded px-1 py-0.5"
         />
         <input
           type="date"
           name="end_date"
           value={filters.end_date}
           onChange={handleFilterChange}
-          className="bg-gray-800 text-white border border-gray-600 rounded px-2 py-1"
+          className="bg-gray-800 text-white border border-blue-700 rounded px-1 py-0.5"
         />
-        <select
-          name="crypto"
-          value={filters.crypto}
-          onChange={handleFilterChange}
-          className="min-w-[90px] bg-gray-800 text-white border border-gray-600 rounded px-2 py-1"
-        >
-          <option value="">Cripto</option>
-          <option value="xrpusdt">XRP/USDT</option>
-          <option value="btcusdt">BTC/USDT</option>
-          <option value="ethusdt">ETH/USDT</option>
-        </select>
-
         <button
           type="submit"
-          className="min-w-[90px] bg-blue-600 text-white px-2 py-1 rounded hover:bg-blue-700 transition"
+          className="relative min-w-[90px] overflow-hidden rounded-lg border border-blue-700 bg-neutral-900 px-3 py-1 text-[10px] font-semibold uppercase text-white transition-all duration-200 hover:translate-x-[-2px] hover:translate-y-[-2px] hover:rounded-md hover:shadow-[2px_2px_0px_#1e3a8a] active:translate-x-0 active:translate-y-0 active:rounded-lg active:shadow-none disabled:opacity-50 disabled:cursor-not-allowed group"
         >
-          Aplicar
+          <div className="absolute inset-0 z-0 bg-gradient-to-r from-blue-500 to-blue-900 translate-y-full group-hover:translate-y-0 transition-transform duration-200" />
+          <span className="relative z-10">Apply</span>
         </button>
+
+
         <button
-  type="button"
-  className="min-w-[90px] bg-green-600 text-white px-2 py-1 rounded hover:bg-green-700 transition"
-  onClick={async () => {
-    try {
-      if (!toolStates.activeOperation) {
-        toast.error("⚠️ Activa la operación antes de enviar.", {
-          theme: "dark",
-        });
-        return;
-      }
-  
-      const values = {
-        AU: toolStates.AU?.value,
-        AD: toolStates.AD?.value,
-      };
-  
-      // Validación: no vacíos y con 4 decimales
-      for (const [key, val] of Object.entries(values)) {
-        if (val === undefined || val === null || val === "") {
-          toast.error(`❌ ${key} está vacío`, {
-            theme: "dark",
-          });
-          return;
-        }
-  
-        const stringVal = Number(val).toFixed(4);
-        if (!/^\d+\.\d{4}$/.test(stringVal)) {
-          toast.error(`❌ ${key} debe tener exactamente 4 decimales`, {
-            theme: "dark",
-          });
-          return;
-        }
-  
-        values[key] = { value: stringVal };
-      }
-  
-      const result = await submitOperationConfig(symbol, values);
-      toast.success("✅ Config enviada correctamente", {
-        theme: "dark",
-      });
-      console.log("✅ Config enviada:", result);
-  
-      /*setToolStates(prev => ({
-        ...prev,
-        TK: { ...prev.TK, value: 0, visible: false },
-        SL: { ...prev.SL, value: 0, visible: false },
-        TB: { ...prev.TB, value: 0, visible: false },
-      }));*/
-    } catch (error) {
-      toast.error("❌ Fallo al enviar configuración.", {
-        theme: "dark",
-      });
-      console.error("❌ Error:", error);
-    }
-  }}
->
-  Enviar Config
-</button>
+          type="button"
+          onClick={async () => {
+            try {
+              if (!toolStates.active_alerts) {
+                toast.error("⚠️ Activa la operación antes de enviar.", {
+                  theme: "dark",
+                });
+                return;
+              }
+              const values = {
+                alert_up: toolStates.alert_up?.value,
+                alert_down: toolStates.alert_down?.value,
+                active_alerts: !!toolStates.active_alerts,
+                active_operations: !!toolStates.active_operations,
+              };
+
+              for (const key of ["alert_up", "alert_down"]) {
+                const val = values[key];
+                if (val === undefined || val === null || val === "") {
+                  toast.error(`❌ ${key} está vacío`, {
+                    theme: "dark",
+                  });
+                  return;
+                }
+
+                const stringVal = Number(val).toFixed(4);
+                if (!/^\d+\.\d{4}$/.test(stringVal)) {
+                  toast.error(`❌ ${key} debe tener exactamente 4 decimales`, {
+                    theme: "dark",
+                  });
+                  return;
+                }
+
+                values[key] = stringVal;
+              }
+
+              const result = await submitOperationConfig(symbol, values);
+              console.log(symbol, values);
+              toast.success("✅ Config enviada correctamente", {
+                theme: "dark",
+              });
+            } catch (error) {
+              toast.error("❌ Fallo al enviar configuración.", {
+                theme: "dark",
+              });
+              console.error("❌ Error:", error);
+            }
+          }}
+          className="relative min-w-[90px] overflow-hidden rounded-lg border border-yellow-700 bg-neutral-900 px-3 py-1 text-[10px] font-semibold uppercase text-white transition-all duration-200 hover:translate-x-[-2px] hover:translate-y-[-2px] hover:rounded-md hover:shadow-[2px_2px_0px_#a16207] active:translate-x-0 active:translate-y-0 active:rounded-lg active:shadow-none disabled:opacity-50 disabled:cursor-not-allowed group"
+        >
+          <div className="absolute inset-0 z-0 bg-gradient-to-r from-yellow-500 to-yellow-900 translate-y-full group-hover:translate-y-0 transition-transform duration-200" />
+          <span className="relative z-10">SendConfig</span>
+        </button>
+
+
+        <button
+          type="button"
+          onClick={async () => {
+            try {
+              const result = await stopOperation(symbol);
+              toast.success("🛑 Operación detenida exitosamente", { theme: "dark" });
+              console.log("🛑 Resultado stopOperation:", result);
+            } catch (error) {
+              toast.error("❌ Error al detener la operación", { theme: "dark" });
+            }
+          }}
+          className="relative min-w-[90px] overflow-hidden rounded-lg border border-red-700 bg-neutral-900 px-3 py-1 text-[10px] font-semibold uppercase text-white transition-all duration-200 hover:translate-x-[-2px] hover:translate-y-[-2px] hover:rounded-md hover:shadow-[2px_2px_0px_#991b1b] active:translate-x-0 active:translate-y-0 active:rounded-lg active:shadow-none disabled:opacity-50 disabled:cursor-not-allowed group"
+        >
+          <div className="absolute inset-0 z-0 bg-gradient-to-r from-red-500 to-red-900 translate-y-full group-hover:translate-y-0 transition-transform duration-200" />
+          <span className="relative z-10">Stop Operations</span>
+        </button>
+
+
+
+
+        <button
+          type="button"
+          onClick={async () => {
+            try {
+              console.log("🟢 Ejecutando orden de compra para", symbol);
+              const result = await buyOrder(symbol, toolStates.active_operations, toolStates.active_alerts);
+              toast.success("✅ Orden de compra ejecutada", { theme: "dark" });
+              console.log("🟢 Resultado buyOrder:", result);
+            } catch (error) {
+              toast.error("❌ Error al ejecutar orden de compra", { theme: "dark" });
+              console.error("❌ Error:", error);
+            }
+          }}
+          className="relative overflow-hidden rounded-lg border border-green-600 bg-neutral-900 px-3 py-1 text-[10px] font-semibold uppercase text-white transition-all duration-200 hover:translate-x-[-2px] hover:translate-y-[-2px] hover:rounded-md hover:shadow-[2px_2px_0px_#15803d] active:translate-x-0 active:translate-y-0 active:rounded-lg active:shadow-none disabled:opacity-50 disabled:cursor-not-allowed group"
+        >
+          <div className="absolute inset-0 z-0 bg-gradient-to-r from-green-500 to-green-900 translate-y-full group-hover:translate-y-0 transition-transform duration-200" />
+          <span className="relative z-10">Buy</span>
+        </button>
+
+
+
+        <button
+          type="button"
+          onClick={async () => {
+            try {
+              console.log("funcion ejecutando", symbol);
+              const result = await sellOrder(symbol, toolStates.active_operations, toolStates.active_alerts); // 🔴 Llama a la API
+              toast.success("✅ Orden de venta ejecutada", { theme: "dark" });
+              console.log("🔴 Resultado sellOrder:", result);
+            } catch (error) {
+              toast.error("❌ Error al ejecutar orden de venta", { theme: "dark" });
+            }
+          }}
+          className="relative overflow-hidden rounded-lg border border-purple-600 bg-neutral-900 px-3 py-1 text-[10px] font-semibold uppercase text-white transition-all duration-200 hover:translate-x-[-2px] hover:translate-y-[-2px] hover:rounded-md hover:shadow-[2px_2px_0px_#6b21a8] active:translate-x-0 active:translate-y-0 active:rounded-lg active:shadow-none disabled:opacity-50 disabled:cursor-not-allowed group"
+        >
+          <div className="absolute inset-0 z-0 bg-gradient-to-r from-purple-500 to-purple-900 translate-y-full group-hover:translate-y-0 transition-transform duration-200" />
+          <span className="relative z-10">Vender</span>
+        </button>
       </form>
     </div>
   );

@@ -7,8 +7,8 @@ const ToolInput = ({ label, value, setValue, disabled = false }) => {
   };
 
   return (
-    <div className="bg-[#181A20] text-white p-2 w-full h-auto ">      
-      <label className="text-white text-sm  mb-1 capitalize">
+    <div className="bg-[#181A20] text-white p-1 min-w-[110px] flex flex-col items-start">   
+      <label className="text-white text-xs mb-0.5 capitalize">
         {label.replace("_", " ")}
       </label>
       <input
@@ -16,9 +16,9 @@ const ToolInput = ({ label, value, setValue, disabled = false }) => {
         value={value || ""}
         onChange={handleChange}
         step="0.0001"
-        placeholder="0.0"
+        placeholder=""
         disabled={disabled}
-        className="w-full max-w-[100px] p-1 rounded bg-gray-900 text-white border border-gray-600 text-sm"
+        className="w-full p-1 rounded bg-gray-900 text-white border border-blue-800 text-xs"
       />
     </div>
   );

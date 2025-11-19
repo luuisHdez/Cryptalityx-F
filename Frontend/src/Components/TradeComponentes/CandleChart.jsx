@@ -107,7 +107,6 @@ const CandleChart = ({ data, toolStates, setToolStates, onLoadMore }) => {
       const cd = param?.seriesData?.get(candlestickSeries.current);
       if (!cd) return;
       const ts = typeof param.time === "number" ? param.time : param.time.timestamp;
-      const dataPoint = { open: cd.open, high: cd.high, low: cd.low, close: cd.close, time: ts };
       const date = new Date(ts * 1000).toLocaleString("sv-SE", { timeZone: "UTC" });
       const color = cd.close > cd.open ? "#0ecb81" : cd.close < cd.open ? "#f6465d" : "#eaecef";
       if (legendContentRef.current) {
@@ -133,24 +132,24 @@ const CandleChart = ({ data, toolStates, setToolStates, onLoadMore }) => {
   // Scroll hacia atrás -> carga más datos
   // -- scroll hacia atrás para cargar más datos --
   useEffect(() => {
-      const chart = chartInstance.current;
-      if (!chart) return;
-      const timeScale = chart.timeScale();
-    
-      // solo dispara cuando 'from' llega a 0 (el primer candle)
-      const handler = ({ from }) => {
-        if (from <= 0 && !isLoadingMoreRef.current) {
-          isLoadingMoreRef.current = true;
-          onLoadMoreRef.current(earliestLoadedTimeRef.current)
-            .finally(() => { isLoadingMoreRef.current = false; });
-        }
-      };
-    
-      timeScale.subscribeVisibleLogicalRangeChange(handler);
-      return () => {
-        timeScale.unsubscribeVisibleLogicalRangeChange(handler);
-      };
-    }, []);
+  const timeScale = chartInstance.current?.timeScale();
+  if (!timeScale) return;
+
+  const handler = (range) => {
+    if (!range || range.from === undefined) return;    // ← evita destructurar null
+    if (range.from <= 0 && !isLoadingMoreRef.current) {
+      isLoadingMoreRef.current = true;
+      onLoadMoreRef.current(earliestLoadedTimeRef.current)
+        .finally(() => { isLoadingMoreRef.current = false; });
+    }
+  };
+
+  timeScale.subscribeVisibleLogicalRangeChange(handler);
+  return () => {
+    timeScale.unsubscribeVisibleLogicalRangeChange(handler);
+  };
+}, []);
+
 
   // Renderiza velas
   useEffect(() => {

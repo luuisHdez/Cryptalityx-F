@@ -173,7 +173,7 @@ const EditOptions = ({ selectedVideo }) => {
       </div>
 
       {/* Botones sociales */}
-      <div className="pt-3">
+      <div className="pt-3 w-full overflow-hidden">
         <SocialButtons filename={form.filename} />
       </div>
     </div>

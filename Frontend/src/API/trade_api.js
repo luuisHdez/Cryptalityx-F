@@ -1,66 +1,55 @@
-// src/API/trade_api.js
-import { io } from "socket.io-client";
+// ✅ Este archivo NO crea su propio socket
+// Solo define funciones que reciben el socket como argumento
 
-// Conexión manual al backend Socket.IO (sin fallback y sin autoconectar)
-const socket = io("http://localhost:8001", {
-  transports: ["websocket"],
-  autoConnect: false, // 🔧 Requiere llamada explícita a .connect()
-  withCredentials: true
-});
-// 🔁 Reintento automático si el JWT está expirado
-import { refreshToken } from "../API/auth.api"; // asegúrate que esto ya existe
-
-socket.on("connect_error", async (err) => {
-  if (err?.reason === "token expired") {
-    console.warn("⚠️ JWT expirado. Intentando refrescar...");
-    try {
-      await refreshToken();     // intenta refrescar el token
-      socket.connect();         // reconecta automáticamente
-    } catch (e) {
-      console.error("❌ Falló refreshToken tras expiración:", e);
-      window.location.href = "/login";  // fuerza login si falla
-    }
+// Emitir suscripción a un símbolo e intervalo
+export const subscribeToSymbol = (socket, symbol, interval) => {
+  if (socket && socket.connected && socket.emit) {
+    console.log("📡 Enviando suscripción:", { symbol, interval });
+    socket.emit("subscribe", { symbol, interval });
+  } else {
+    console.warn("❌ Socket no disponible o no conectado para subscribeToSymbol");
   }
-});
-
-
-// Conecta si no está conectado
-export const connectSocket = () => {
-  if (!socket.connected) socket.connect();
 };
 
-// Desconecta si está conectado
-export const disconnectSocket = () => {
-  if (socket.connected) socket.disconnect();
+// Escuchar datos emitidos por el servidor (velas en tiempo real)
+export const listenToData = (socket, callback) => {
+  if (socket && socket.on) {
+    socket.off("binance_data"); // 🔄 Previene listeners duplicados
+    socket.on("binance_data", callback);
+    console.log("👂 Listener registrado: binance_data");
+  } else {
+    console.warn("❌ Socket no disponible o no soporta eventos para listenToData");
+  }
 };
 
-// Suscribirse a un símbolo/intervalo
-export const subscribeToSymbol = (symbol, interval) => {
-  socket.emit("subscribe", { symbol, interval });
+// Escuchar ejecución de operación (operation_executed)
+export const listeningOperationActivated = (socket, callback) => {
+  if (socket && socket.on) {
+    socket.off("operation_executed");
+    socket.on("operation_executed", callback);
+    console.log("👂 Listener registrado: operation_executed");
+  } else {
+    console.warn("❌ Socket no disponible o no soporta eventos para listeningOperationActivated");
+  }
 };
 
-// Escuchar datos emitidos por el servidor
-export const listenToData = (callback) => {
-  socket.on("binance_data", callback);
+// Detener todos los listeners activos
+export const stopListening = (socket) => {
+  if (socket && socket.off) {
+    socket.off("binance_data");
+    socket.off("operation_executed");
+    console.log("🛑 Listeners eliminados: binance_data, operation_executed");
+  } else {
+    console.warn("❌ Socket no disponible o no soporta eventos para stopListening");
+  }
 };
 
-export const listeningOperationActivated = (callback) => {
-  socket.on("operation_executed", callback);
-};
-
-// Dejar de escuchar
-export const stopListening = () => {
-  socket.off("binance_data");
-};
-
-// Exponer en consola para pruebas
+// (Opcional) Exponer para pruebas desde consola del navegador
 if (typeof window !== "undefined") {
-  window.apiTrade = {
-    connectSocket,
-    disconnectSocket,
+  window.apiTradeUtils = {
     subscribeToSymbol,
     listenToData,
     stopListening,
-    listeningOperationActivated
+    listeningOperationActivated,
   };
 }

@@ -3,7 +3,7 @@ import { refreshToken } from "../API/auth.api"; // ajusta la ruta si es distinto
 
 
 const api = axios.create({
-  baseURL: "http://localhost:8001",
+  baseURL: "https://localhost:8001",
   withCredentials: true,
 });
 
@@ -35,7 +35,6 @@ export const fetchHistoricalData = async (symbol, interval, before = null) => {
       const params = before ? { params: { before } } : {};
       const response = await api.get(`/historical-data/${symbol}/${interval}`, {
         ...params,
-        withCredentials: false,
       });
   
       if (!response.data || response.data.length === 0) {
@@ -84,13 +83,12 @@ export const updateBinanceData = async (startDate, endDate, symbol) => {
     }
 };
 
-export const submitOperationConfig = async (symbol, toolStates) => {
-    console.log(toolStates)
+export const submitOperationConfig = async (symbol, values) => {
+    console.log(values)
     try {
       const payload = {
         symbol: symbol.toUpperCase(),
-        alert_up: toolStates.AU?.value,
-        alert_down: toolStates.AD?.value,
+        ...values
       };
   
       const response = await api.post(`/operation-config`, payload);
@@ -109,11 +107,70 @@ export const fetchUpdatedData = async (symbol, interval) => {
 
   try {
     const response = await api.get(`/update-then-fetch/${symbol}/${interval}`, {
-      withCredentials: false,
     });
     return response.data;
   } catch (error) {
     console.error("❌ Error en fetchUpdatedData:", error.response?.data || error);
+    return [];
+  }
+};
+
+
+// 🔴 Detener operación activa para un símbolo
+export const stopOperation = async (symbol) => {
+  try {
+    const payload = { symbol: symbol.toUpperCase() };
+    const response = await api.post(`/stop-operation`, payload);
+    return response.data;
+  } catch (error) {
+    console.error("❌ Error al detener operación:", error.response?.data || error);
+    throw error;
+  }
+};
+
+export const buyOrder = async (symbol, active_operations = false, active_alerts = false) => {
+  try {
+    const payload = {
+      symbol: symbol.toUpperCase(),
+      active_operations: !!active_operations, // asegura que sea booleano
+      active_alerts: !!active_alerts,
+    };
+    const response = await api.post(`/buy-order`, payload);
+    return response.data;
+  } catch (error) {
+    console.error("❌ Error al ejecutar orden de compra:", error.response?.data || error);
+    throw error;
+  }
+};
+
+export const sellOrder = async (symbol, active_operations = false, active_alerts = false) => {
+  try {
+    const payload = { symbol: symbol.toUpperCase(),
+      active_operations: !!active_operations,
+      active_alerts: !!active_alerts,
+     };
+    console.log(payload)
+    const response = await api.post(`/sell-order`, payload);
+    return response.data;
+  } catch (error) {
+    console.error("❌ Error al ejecutar orden de venta:", error.response?.data || error);
+    throw error;
+  }
+};
+
+export const fetchOperationResults = async (symbol, limit = 50) => {
+  if (!symbol) {
+    console.warn("⚠️ Symbol no definido para fetchOperationResults.");
+    return [];
+  }
+
+  try {
+    const response = await api.get(`/operation-results/${symbol.toUpperCase()}`, {
+      params: { limit },
+    });
+    return response.data;
+  } catch (error) {
+    console.error("❌ Error al obtener resultados de operación:", error.response?.data || error);
     return [];
   }
 };
