@@ -86,6 +86,7 @@ const ChartDataProvider = ({ symbol, interval, setSymbol, setInterval, operation
         high: Number(k.h),
         low: Number(k.l),
         close: Number(k.c),
+        volume: Number(k.v)
       };
       setCurrentPrice(Number(k.c));
       setCandles((prev) => {

@@ -1,5 +1,10 @@
 import React, { useEffect, useRef } from "react";
-import { createChart, CandlestickSeries, CrosshairMode } from "lightweight-charts";
+import {
+  createChart,
+  CandlestickSeries,
+  HistogramSeries,
+  CrosshairMode,
+} from "lightweight-charts";
 
 const TOOL_COLORS = {
   stop_loss: "red",
@@ -10,172 +15,234 @@ const TOOL_COLORS = {
   alert_down: "purple",
 };
 
-const CandleChart = ({ data, toolStates, setToolStates, onLoadMore }) => {
-  const chartContainerRef = useRef(null);
-  const chartInstance = useRef(null);
-  const candlestickSeries = useRef(null);
+const CandleChart = ({ data, toolStates, onLoadMore }) => {
+  const priceChartRef = useRef(null);
+  const volumeChartRef = useRef(null);
+
+  const priceChart = useRef(null);
+  const volumeChart = useRef(null);
+
+  const candleSeries = useRef(null);
+  const volumeSeries = useRef(null);
+
   const linesRef = useRef({});
   const legendContentRef = useRef(null);
-  const lastCandleRef = useRef(null);
+
   const earliestLoadedTimeRef = useRef(null);
   const isLoadingMoreRef = useRef(false);
   const onLoadMoreRef = useRef(onLoadMore);
 
-  // Mantener referencia estable de onLoadMore
-  useEffect(() => { onLoadMoreRef.current = onLoadMore; }, [onLoadMore]);
-
-  // Crear gráfico y leyenda
   useEffect(() => {
-    if (!chartContainerRef.current) return;
+    onLoadMoreRef.current = onLoadMore;
+  }, [onLoadMore]);
 
-    const chart = createChart(chartContainerRef.current, {
-      width: chartContainerRef.current.clientWidth,
-      height: chartContainerRef.current.clientHeight,
+  // ===============================
+  // INIT CHARTS
+  // ===============================
+  useEffect(() => {
+    if (!priceChartRef.current || !volumeChartRef.current) return;
+
+    // -------- PRICE CHART
+    priceChart.current = createChart(priceChartRef.current, {
       layout: {
         background: { color: "#0b0e11" },
         textColor: "#eaecef",
         fontSize: 12,
-        fontFamily: "'Inter', sans-serif",
       },
-      grid: { vertLines: { color: "#1e2026" }, horzLines: { color: "#1e2026" } },
+      grid: {
+        vertLines: { color: "#1e2026" },
+        horzLines: { color: "#1e2026" },
+      },
       crosshair: { mode: CrosshairMode.Normal },
+      rightPriceScale: {
+        scaleMargins: { top: 0.1, bottom: 0.1 },
+      },
       timeScale: {
-           timeVisible: true,
-           borderColor: "#3a3a3a",
-           barSpacing: 10,
-           handleScroll: {
-             mouseWheel: true,
-             pressedMouseMove: true,
-           },
-         },
-    });
-    chartInstance.current = chart;
-
-    candlestickSeries.current = chart.addSeries(CandlestickSeries, {
-      upColor: "#0ecb81",
-      downColor: "#f6465d",
-      borderVisible: false,
-      wickUpColor: "#0ecb81",
-      wickDownColor: "#f6465d",
-      priceFormat: { type: "price", precision: 4, minMove: 0.0001 },
+        visible: false,
+      },
     });
 
-    // Resize
-    const resizeObserver = new ResizeObserver(() => {
-      chart.applyOptions({
-        width: chartContainerRef.current.clientWidth,
-        height: chartContainerRef.current.clientHeight,
-      });
+    candleSeries.current = priceChart.current.addSeries(
+      CandlestickSeries,
+      {
+        upColor: "#0ecb81",
+        downColor: "#f6465d",
+        wickUpColor: "#0ecb81",
+        wickDownColor: "#f6465d",
+        borderVisible: false,
+        priceFormat: {
+          type: "price",
+          precision: 4,
+          minMove: 0.0001,
+        },
+      }
+    );
+
+    // -------- VOLUME CHART
+    volumeChart.current = createChart(volumeChartRef.current, {
+      layout: {
+        background: { color: "#0b0e11" },
+        textColor: "#eaecef",
+        fontSize: 12,
+      },
+      grid: {
+        vertLines: { color: "#1e2026" },
+        horzLines: { color: "#1e2026" },
+      },
+      crosshair: { mode: CrosshairMode.Normal },
+      rightPriceScale: {
+        scaleMargins: { top: 0, bottom: 0.15 },
+      },
+      timeScale: {
+        visible: true,
+      },
     });
-    resizeObserver.observe(chartContainerRef.current);
 
-    // Leyenda contenedor
-    const legendContainer = document.createElement("div");
-    legendContainer.className =
-      "absolute top-0 left-0 w-full z-50 bg-[#131722] text-white text-xs px-4 py-2 flex items-center gap-4";
-    legendContainer.style.height = "24px";
-    chartContainerRef.current.appendChild(legendContainer);
+    volumeSeries.current = volumeChart.current.addSeries(
+      HistogramSeries,
+      {
+        priceFormat: { type: "volume" },
+      }
+    );
 
-    // Botón toggler de leyenda
-    const toggleButton = document.createElement("div");
-    toggleButton.innerHTML = `<svg class=\"w-4 h-4\" viewBox=\"0 0 16 16\"><path fill=\"#929AA5\" d=\"M7.9 8.1L10.5 5.5 11.7 6.7 7.9 10.4 6.7 9.3 4.2 6.7 5.3 5.5z\"/></svg>`;
-    toggleButton.style.cursor = "pointer";
-    toggleButton.className = "flex items-center justify-center mr-2";
-    legendContainer.appendChild(toggleButton);
-
-    // Contenido
-    const legendContent = document.createElement("div");
-    legendContent.className = "flex gap-4 overflow-hidden";
-    legendContent.innerHTML = `
-      <div id=\"legend-time\"><span>-</span></div>
-      <div id=\"legend-open\">OPEN: <span>-</span></div>
-      <div id=\"legend-high\">HIGH: <span>-</span></div>
-      <div id=\"legend-low\">LOW: <span>-</span></div>
-      <div id=\"legend-close\">CLOSE: <span>-</span></div>
-    `;
-    legendContainer.appendChild(legendContent);
-    legendContentRef.current = legendContent;
-
-    let expanded = false;
-    toggleButton.onclick = () => {
-      expanded = !expanded;
-      legendContent.style.display = expanded ? "none" : "flex";
+    // ===============================
+    // SYNC ZOOM / SCROLL
+    // ===============================
+    const syncRange = (source, target) => range => {
+      if (range) {
+        target.timeScale().setVisibleLogicalRange(range);
+      }
     };
 
-    // Crosshair move
-    chart.subscribeCrosshairMove(param => {
-      const cd = param?.seriesData?.get(candlestickSeries.current);
-      if (!cd) return;
-      const ts = typeof param.time === "number" ? param.time : param.time.timestamp;
-      const date = new Date(ts * 1000).toLocaleString("sv-SE", { timeZone: "UTC" });
-      const color = cd.close > cd.open ? "#0ecb81" : cd.close < cd.open ? "#f6465d" : "#eaecef";
-      if (legendContentRef.current) {
-        legendContentRef.current.querySelector("#legend-time span").textContent = date;
-        ["open","high","low","close"].forEach(name => {
-          const el = legendContentRef.current.querySelector(`#legend-${name} span`);
-          el.textContent = cd[name]; el.style.color = name !== "time" ? color : undefined;
-        });
-      }
+    priceChart.current.timeScale()
+      .subscribeVisibleLogicalRangeChange(
+        syncRange(priceChart.current, volumeChart.current)
+      );
+
+    volumeChart.current.timeScale()
+      .subscribeVisibleLogicalRangeChange(
+        syncRange(volumeChart.current, priceChart.current)
+      );
+
+    // ===============================
+    // LOAD MORE
+    // ===============================
+    priceChart.current.timeScale()
+      .subscribeVisibleLogicalRangeChange(range => {
+        if (!range || range.from > 0) return;
+        if (isLoadingMoreRef.current) return;
+
+        isLoadingMoreRef.current = true;
+        onLoadMoreRef.current?.(earliestLoadedTimeRef.current)
+          ?.finally(() => {
+            isLoadingMoreRef.current = false;
+          });
+      });
+
+    // ===============================
+    // LEGEND (PRICE ONLY)
+    // ===============================
+    const legend = document.createElement("div");
+    legend.className =
+      "absolute top-0 left-0 w-full z-50 bg-[#131722] text-white text-xs px-4 py-2 flex gap-4";
+    priceChartRef.current.appendChild(legend);
+
+    legend.innerHTML = `
+      <div id="legend-time">-</div>
+      <div id="legend-open">OPEN: -</div>
+      <div id="legend-high">HIGH: -</div>
+      <div id="legend-low">LOW: -</div>
+      <div id="legend-close">CLOSE: -</div>
+    `;
+
+    legendContentRef.current = legend;
+
+    priceChart.current.subscribeCrosshairMove(param => {
+      const cd = param?.seriesData?.get(candleSeries.current);
+      if (!cd || !param.time) return;
+
+      const ts = typeof param.time === "number"
+        ? param.time
+        : param.time.timestamp;
+
+      const date = new Date(ts * 1000).toLocaleString("sv-SE", {
+        timeZone: "UTC",
+      });
+
+      legend.querySelector("#legend-time").textContent = date;
+      legend.querySelector("#legend-open").textContent = `OPEN: ${cd.open}`;
+      legend.querySelector("#legend-high").textContent = `HIGH: ${cd.high}`;
+      legend.querySelector("#legend-low").textContent = `LOW: ${cd.low}`;
+      legend.querySelector("#legend-close").textContent = `CLOSE: ${cd.close}`;
     });
 
     return () => {
-      resizeObserver.disconnect();
-      chart.remove();
+      priceChart.current.remove();
+      volumeChart.current.remove();
     };
   }, []);
 
-  // Actualiza earliestLoadedTime al cambiar datos
+  // ===============================
+  // SET DATA
+  // ===============================
   useEffect(() => {
-    if (data?.length) earliestLoadedTimeRef.current = data[0].time;
+    if (!data?.length) return;
+
+    earliestLoadedTimeRef.current = data[0].time;
+
+    candleSeries.current.setData(data);
+
+    volumeSeries.current.setData(
+      data.map(c => ({
+        time: c.time,
+        value: Number(c.volume || c.v || c.k?.v || 0),
+        color:
+          c.close >= c.open
+            ? "rgba(14,203,129,0.5)"
+            : "rgba(246,70,93,0.5)",
+      }))
+    );
   }, [data]);
 
-  // Scroll hacia atrás -> carga más datos
-  // -- scroll hacia atrás para cargar más datos --
+  // ===============================
+  // PRICE LINES (TOOLS)
+  // ===============================
   useEffect(() => {
-  const timeScale = chartInstance.current?.timeScale();
-  if (!timeScale) return;
+    if (!candleSeries.current) return;
 
-  const handler = (range) => {
-    if (!range || range.from === undefined) return;    // ← evita destructurar null
-    if (range.from <= 0 && !isLoadingMoreRef.current) {
-      isLoadingMoreRef.current = true;
-      onLoadMoreRef.current(earliestLoadedTimeRef.current)
-        .finally(() => { isLoadingMoreRef.current = false; });
-    }
-  };
+    Object.entries(toolStates).forEach(([tool, { visible, value }]) => {
+      if ((!visible || !value) && linesRef.current[tool]) {
+        candleSeries.current.removePriceLine(linesRef.current[tool]);
+        linesRef.current[tool] = null;
+        return;
+      }
 
-  timeScale.subscribeVisibleLogicalRangeChange(handler);
-  return () => {
-    timeScale.unsubscribeVisibleLogicalRangeChange(handler);
-  };
-}, []);
-
-
-  // Renderiza velas
-  useEffect(() => {
-    if (!data || !candlestickSeries.current) return;
-    candlestickSeries.current.setData(data);
-    lastCandleRef.current = data[data.length - 1];
-  }, [data]);
-
-  // Líneas dinámicas
-  useEffect(() => {
-    if (!candlestickSeries.current) return;
-    Object.entries(toolStates).forEach(([tool,{visible,value}]) => {
-      if ((!visible||!value)&&linesRef.current[tool]){
-        candlestickSeries.current.removePriceLine(linesRef.current[tool]);
-        linesRef.current[tool]=null;
-      } else if (visible&&value) {
+      if (visible && value) {
         if (!linesRef.current[tool]) {
-          linesRef.current[tool] = candlestickSeries.current.createPriceLine({ price:value, color:TOOL_COLORS[tool], lineWidth:3, lineStyle:0, axisLabelVisible:true, title:tool});
+          linesRef.current[tool] =
+            candleSeries.current.createPriceLine({
+              price: value,
+              color: TOOL_COLORS[tool],
+              lineWidth: 2,
+              axisLabelVisible: true,
+              title: tool,
+            });
         } else {
-          linesRef.current[tool].applyOptions({ price:value });
+          linesRef.current[tool].applyOptions({ price: value });
         }
       }
     });
-  }, [toolStates,data]);
+  }, [toolStates, data]);
 
-  return <div ref={chartContainerRef} className="w-full h-[400px] relative" />;
+  // ===============================
+  // RENDER
+  // ===============================
+  return (
+    <div className="w-full h-[500px] flex flex-col">
+      <div ref={priceChartRef} className="w-full h-[70%] relative" />
+      <div ref={volumeChartRef} className="w-full h-[30%]" />
+    </div>
+  );
 };
 
 export default CandleChart;
