@@ -16,8 +16,12 @@ const TOOL_COLORS = {
 };
 
 const CandleChart = ({ data, toolStates, onLoadMore }) => {
+  const chartContainerRef = useRef(null); // Ref para el contenedor principal
   const priceChartRef = useRef(null);
   const volumeChartRef = useRef(null);
+
+  const overlayVertRef = useRef(null);
+  const overlayHorzRef = useRef(null);
 
   const priceChart = useRef(null);
   const volumeChart = useRef(null);
@@ -53,9 +57,14 @@ const CandleChart = ({ data, toolStates, onLoadMore }) => {
         vertLines: { color: "#1e2026" },
         horzLines: { color: "#1e2026" },
       },
-      crosshair: { mode: CrosshairMode.Normal },
+      crosshair: {
+        mode: CrosshairMode.Normal,
+        vertLine: { visible: false },
+        horzLine: { visible: false },
+      },
       rightPriceScale: {
         scaleMargins: { top: 0.1, bottom: 0.1 },
+        minimumWidth: 80,
       },
       timeScale: {
         visible: false,
@@ -89,9 +98,14 @@ const CandleChart = ({ data, toolStates, onLoadMore }) => {
         vertLines: { color: "#1e2026" },
         horzLines: { color: "#1e2026" },
       },
-      crosshair: { mode: CrosshairMode.Normal },
+      crosshair: {
+        mode: CrosshairMode.Normal,
+        vertLine: { visible: false },
+        horzLine: { visible: false },
+      },
       rightPriceScale: {
         scaleMargins: { top: 0, bottom: 0.15 },
+        minimumWidth: 80,
       },
       timeScale: {
         visible: true,
@@ -104,6 +118,22 @@ const CandleChart = ({ data, toolStates, onLoadMore }) => {
         priceFormat: { type: "volume" },
       }
     );
+
+    // ===============================
+    // AUTO-RESIZE LOGIC (AGREGADO AQUÍ)
+    // ===============================
+    const resizeObserver = new ResizeObserver((entries) => {
+      if (entries.length === 0 || !entries[0].contentRect) return;
+      
+      const { width, height } = entries[0].contentRect;
+      
+      // Ajustamos el tamaño de los gráficos basándonos en el contenedor
+      // El de precio toma el 70% y el de volumen el 30% del alto total
+      priceChart.current.resize(width, height * 0.7);
+      volumeChart.current.resize(width, height * 0.3);
+    });
+
+    resizeObserver.observe(chartContainerRef.current);
 
     // ===============================
     // SYNC ZOOM / SCROLL
@@ -140,7 +170,7 @@ const CandleChart = ({ data, toolStates, onLoadMore }) => {
       });
 
     // ===============================
-    // LEGEND (PRICE ONLY)
+    // LEGEND
     // ===============================
     const legend = document.createElement("div");
     legend.className =
@@ -157,13 +187,31 @@ const CandleChart = ({ data, toolStates, onLoadMore }) => {
 
     legendContentRef.current = legend;
 
+    // ===============================
+    // CROSSHAIR → OVERLAY (PRICE)
+    // ===============================
     priceChart.current.subscribeCrosshairMove(param => {
-      const cd = param?.seriesData?.get(candleSeries.current);
-      if (!cd || !param.time) return;
+      if (!param || !param.point || !param.time) {
+        overlayVertRef.current.style.display = "none";
+        overlayHorzRef.current.style.display = "none";
+        return;
+      }
 
-      const ts = typeof param.time === "number"
-        ? param.time
-        : param.time.timestamp;
+      const { x, y } = param.point;
+
+      overlayVertRef.current.style.transform = `translateX(${x}px)`;
+      overlayVertRef.current.style.display = "block";
+
+      overlayHorzRef.current.style.transform = `translateY(${y}px)`;
+      overlayHorzRef.current.style.display = "block";
+
+      const cd = param.seriesData.get(candleSeries.current);
+      if (!cd) return;
+
+      const ts =
+        typeof param.time === "number"
+          ? param.time
+          : param.time.timestamp;
 
       const date = new Date(ts * 1000).toLocaleString("sv-SE", {
         timeZone: "UTC",
@@ -176,7 +224,29 @@ const CandleChart = ({ data, toolStates, onLoadMore }) => {
       legend.querySelector("#legend-close").textContent = `CLOSE: ${cd.close}`;
     });
 
+    // ===============================
+    // CROSSHAIR → OVERLAY (VOLUME)
+    // ===============================
+    volumeChart.current.subscribeCrosshairMove(param => {
+      if (!param || !param.point || !param.time) {
+        overlayVertRef.current.style.display = "none";
+        overlayHorzRef.current.style.display = "none";
+        return;
+      }
+
+      const { x, y } = param.point;
+      const priceChartHeight = priceChartRef.current.clientHeight;
+
+      overlayVertRef.current.style.transform = `translateX(${x}px)`;
+      overlayVertRef.current.style.display = "block";
+
+      overlayHorzRef.current.style.transform =
+        `translateY(${priceChartHeight + y}px)`;
+      overlayHorzRef.current.style.display = "block";
+    });
+
     return () => {
+      resizeObserver.disconnect(); // Limpiar observador
       priceChart.current.remove();
       volumeChart.current.remove();
     };
@@ -205,7 +275,7 @@ const CandleChart = ({ data, toolStates, onLoadMore }) => {
   }, [data]);
 
   // ===============================
-  // PRICE LINES (TOOLS)
+  // PRICE LINES
   // ===============================
   useEffect(() => {
     if (!candleSeries.current) return;
@@ -238,7 +308,19 @@ const CandleChart = ({ data, toolStates, onLoadMore }) => {
   // RENDER
   // ===============================
   return (
-    <div className="w-full h-[500px] flex flex-col">
+    <div ref={chartContainerRef} className="w-full h-[500px] flex flex-col relative">
+      <div
+        ref={overlayVertRef}
+        className="absolute top-0 left-0 h-full w-px bg-white/40 pointer-events-none z-50"
+        style={{ display: "none" }}
+      />
+
+      <div
+        ref={overlayHorzRef}
+        className="absolute left-0 w-full h-px bg-white/40 pointer-events-none z-50"
+        style={{ display: "none" }}
+      />
+
       <div ref={priceChartRef} className="w-full h-[70%] relative" />
       <div ref={volumeChartRef} className="w-full h-[30%]" />
     </div>
