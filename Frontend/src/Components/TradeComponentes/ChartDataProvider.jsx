@@ -75,10 +75,7 @@ const ChartDataProvider = ({ symbol, interval, setSymbol, setInterval, operation
     // Actualización de velas
     if (message?.e === "kline" && message.s === symbol.toUpperCase()) {
       const k = message.k;
-      const utcDate = new Date(k.t);
-      const offsetMs = 6 * 60 * 60 * 1000; // UTC-6
-      const localDate = new Date(utcDate.getTime() - offsetMs);
-      const adjustedTime = Math.floor(localDate.getTime() / 1000);
+      const adjustedTime = Math.floor(k.t / 1000);
 
       const formatted = {
         time: adjustedTime,

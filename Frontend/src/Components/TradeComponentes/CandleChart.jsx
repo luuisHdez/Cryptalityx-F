@@ -16,7 +16,7 @@ const TOOL_COLORS = {
 };
 
 const CandleChart = ({ data, toolStates, onLoadMore }) => {
-  const chartContainerRef = useRef(null); // Ref para el contenedor principal
+  const chartContainerRef = useRef(null);
   const priceChartRef = useRef(null);
   const volumeChartRef = useRef(null);
 
@@ -46,7 +46,6 @@ const CandleChart = ({ data, toolStates, onLoadMore }) => {
   useEffect(() => {
     if (!priceChartRef.current || !volumeChartRef.current) return;
 
-    // -------- PRICE CHART
     priceChart.current = createChart(priceChartRef.current, {
       layout: {
         background: { color: "#0b0e11" },
@@ -67,7 +66,7 @@ const CandleChart = ({ data, toolStates, onLoadMore }) => {
         minimumWidth: 80,
       },
       timeScale: {
-        visible: false,
+       visible: false,
       },
     });
 
@@ -87,7 +86,6 @@ const CandleChart = ({ data, toolStates, onLoadMore }) => {
       }
     );
 
-    // -------- VOLUME CHART
     volumeChart.current = createChart(volumeChartRef.current, {
       layout: {
         background: { color: "#0b0e11" },
@@ -109,6 +107,8 @@ const CandleChart = ({ data, toolStates, onLoadMore }) => {
       },
       timeScale: {
         visible: true,
+  timeVisible: true,
+  secondsVisible: false,
       },
     });
 
@@ -120,15 +120,11 @@ const CandleChart = ({ data, toolStates, onLoadMore }) => {
     );
 
     // ===============================
-    // AUTO-RESIZE LOGIC (AGREGADO AQUÍ)
+    // AUTO-RESIZE
     // ===============================
-    const resizeObserver = new ResizeObserver((entries) => {
-      if (entries.length === 0 || !entries[0].contentRect) return;
-      
+    const resizeObserver = new ResizeObserver(entries => {
+      if (!entries.length) return;
       const { width, height } = entries[0].contentRect;
-      
-      // Ajustamos el tamaño de los gráficos basándonos en el contenedor
-      // El de precio toma el 70% y el de volumen el 30% del alto total
       priceChart.current.resize(width, height * 0.7);
       volumeChart.current.resize(width, height * 0.3);
     });
@@ -187,11 +183,17 @@ const CandleChart = ({ data, toolStates, onLoadMore }) => {
 
     legendContentRef.current = legend;
 
+    const legendTime = legend.querySelector("#legend-time");
+    const legendOpen = legend.querySelector("#legend-open");
+    const legendHigh = legend.querySelector("#legend-high");
+    const legendLow = legend.querySelector("#legend-low");
+    const legendClose = legend.querySelector("#legend-close");
+
     // ===============================
-    // CROSSHAIR → OVERLAY (PRICE)
+    // CROSSHAIR → OVERLAY (PRICE) PERSISTENTE
     // ===============================
     priceChart.current.subscribeCrosshairMove(param => {
-      if (!param || !param.point || !param.time) {
+      if (!param || !param.point) {
         overlayVertRef.current.style.display = "none";
         overlayHorzRef.current.style.display = "none";
         return;
@@ -206,33 +208,29 @@ const CandleChart = ({ data, toolStates, onLoadMore }) => {
       overlayHorzRef.current.style.display = "block";
 
       const cd = param.seriesData.get(candleSeries.current);
-      if (!cd) return;
+      if (cd && param.time) {
+        const ts =
+          typeof param.time === "number"
+            ? param.time
+            : param.time.timestamp;
 
-      const ts =
-        typeof param.time === "number"
-          ? param.time
-          : param.time.timestamp;
+        const date = new Date(ts * 1000).toLocaleString("sv-SE", {
+          timeZone: "UTC",
+        });
 
-      const date = new Date(ts * 1000).toLocaleString("sv-SE", {
-        timeZone: "UTC",
-      });
-
-      legend.querySelector("#legend-time").textContent = date;
-      legend.querySelector("#legend-open").textContent = `OPEN: ${cd.open}`;
-      legend.querySelector("#legend-high").textContent = `HIGH: ${cd.high}`;
-      legend.querySelector("#legend-low").textContent = `LOW: ${cd.low}`;
-      legend.querySelector("#legend-close").textContent = `CLOSE: ${cd.close}`;
+        legendTime.textContent = date;
+        legendOpen.textContent = `OPEN: ${cd.open}`;
+        legendHigh.textContent = `HIGH: ${cd.high}`;
+        legendLow.textContent = `LOW: ${cd.low}`;
+        legendClose.textContent = `CLOSE: ${cd.close}`;
+      }
     });
 
     // ===============================
-    // CROSSHAIR → OVERLAY (VOLUME)
+    // CROSSHAIR → OVERLAY (VOLUME) PERSISTENTE
     // ===============================
     volumeChart.current.subscribeCrosshairMove(param => {
-      if (!param || !param.point || !param.time) {
-        overlayVertRef.current.style.display = "none";
-        overlayHorzRef.current.style.display = "none";
-        return;
-      }
+      if (!param || !param.point) return;
 
       const { x, y } = param.point;
       const priceChartHeight = priceChartRef.current.clientHeight;
@@ -246,7 +244,7 @@ const CandleChart = ({ data, toolStates, onLoadMore }) => {
     });
 
     return () => {
-      resizeObserver.disconnect(); // Limpiar observador
+      resizeObserver.disconnect();
       priceChart.current.remove();
       volumeChart.current.remove();
     };
@@ -308,7 +306,10 @@ const CandleChart = ({ data, toolStates, onLoadMore }) => {
   // RENDER
   // ===============================
   return (
-    <div ref={chartContainerRef} className="w-full h-[500px] flex flex-col relative">
+    <div
+      ref={chartContainerRef}
+      className="w-full h-[500px] flex flex-col relative"
+    >
       <div
         ref={overlayVertRef}
         className="absolute top-0 left-0 h-full w-px bg-white/40 pointer-events-none z-50"

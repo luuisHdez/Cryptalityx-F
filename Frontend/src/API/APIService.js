@@ -59,8 +59,9 @@ export const fetchHistoricalData = async (symbol, interval, before = null) => {
 
 // ✅ NUEVA función para consumir /update-binance-data/
 export const updateBinanceData = async (startDate, endDate, symbol) => {
-    const startTimestamp = new Date(startDate).getTime() + 21600000;; // en ms
-    const endTimestamp = new Date(endDate).getTime() + 21600000;;     // en ms
+    const startTimestamp = new Date(startDate).getTime(); // UTC puro
+const endTimestamp = new Date(endDate).getTime();     // UTC puro
+
 
     if (!symbol || isNaN(startTimestamp) || isNaN(endTimestamp)) {
         console.warn("⚠️ Parámetros inválidos para actualizar datos.");
