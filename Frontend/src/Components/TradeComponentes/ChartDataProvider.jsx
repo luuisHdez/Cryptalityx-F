@@ -75,7 +75,7 @@ const ChartDataProvider = ({ symbol, interval, setSymbol, setInterval, operation
     // Actualización de velas
     if (message?.e === "kline" && message.s === symbol.toUpperCase()) {
       const k = message.k;
-      const adjustedTime = Math.floor(k.t / 1000);
+      const adjustedTime = Math.floor(k.t / 1000) - 6 * 3600;
 
       const formatted = {
         time: adjustedTime,

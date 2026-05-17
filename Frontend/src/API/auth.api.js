@@ -56,7 +56,7 @@ export const fetchCSRFToken = async () => {
 export const loginUser = (credentials) => {
     const csrfToken = Cookies.get('csrftoken'); // 🔥 Obtiene el CSRF token antes de la solicitud
 
-    return authApi.post('oauth-login/', credentials, {
+    return authApi.post('login/', credentials, {
         headers: { 
             'Content-Type': 'application/json',
             'X-CSRFToken': csrfToken // 🔥 Se añade CSRF Token en la cabecera
@@ -77,8 +77,8 @@ export const loginUser = (credentials) => {
 export const register = (credentials) => {
     return authApi.post('register/', {
         email: credentials.email,
-        password: credentials.password,
-        confirmPassword: credentials.confirmPassword
+        password1: credentials.password,
+        password2: credentials.confirmPassword
     }, {
         headers: { 'Content-Type': 'application/json' },
         withCredentials: true

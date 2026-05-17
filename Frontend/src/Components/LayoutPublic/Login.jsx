@@ -49,6 +49,7 @@ const Login = ({ mode }) => {
         }
         await register(credentials);
         toast.success("Registro exitoso");
+        setTimeout(() => navigate("/login"), 1500);
       } catch (error) {
         toast.error(error?.response?.data?.error || "Error al registrar");
       }
@@ -166,8 +167,32 @@ const Login = ({ mode }) => {
             type="submit"
             className="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 bg-black"
           >
-            Sign in
+            {isLogin ? "Sign in" : "Register"}
           </SpotlightButton>
+
+          <p className="mt-4 text-center text-sm text-white">
+            {isLogin ? (
+              <>
+                Don't have an account?{" "}
+                <span
+                  onClick={() => navigate("/register")}
+                  className="font-medium text-indigo-300 hover:text-indigo-100 cursor-pointer"
+                >
+                  Register
+                </span>
+              </>
+            ) : (
+              <>
+                Already have an account?{" "}
+                <span
+                  onClick={() => navigate("/login")}
+                  className="font-medium text-indigo-300 hover:text-indigo-100 cursor-pointer"
+                >
+                  Sign in
+                </span>
+              </>
+            )}
+          </p>
 
           <div className="mt-6">
             <div className="relative">

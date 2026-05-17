@@ -26,6 +26,7 @@ function App() {
         {/* Rutas públicas */}
         <Route element={<LayoutPublic />}>
           <Route path="/login" element={<Login mode="login" />} />
+          <Route path="/register" element={<Register mode="register" />} />
         </Route>
       </Routes>
   );
