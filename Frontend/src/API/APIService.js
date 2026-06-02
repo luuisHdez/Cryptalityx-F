@@ -3,7 +3,7 @@ import { refreshToken } from "../API/auth.api"; // ajusta la ruta si es distinto
 
 
 const api = axios.create({
-  baseURL: "https://localhost:8001",
+  baseURL: `https://${window.location.hostname}:8001`,
   withCredentials: true,
 });
 
@@ -129,13 +129,16 @@ export const stopOperation = async (symbol) => {
   }
 };
 
-export const buyOrder = async (symbol, active_operations = false, active_alerts = false) => {
+export const buyOrder = async (symbol, active_operations = false, active_alerts = false, take_profit = null, stop_loss = null) => {
   try {
     const payload = {
       symbol: symbol.toUpperCase(),
-      active_operations: !!active_operations, // asegura que sea booleano
+      active_operations: !!active_operations,
       active_alerts: !!active_alerts,
     };
+    if (take_profit) payload.take_profit = take_profit;
+    if (stop_loss) payload.stop_loss = stop_loss;
+
     const response = await api.post(`/buy-order`, payload);
     return response.data;
   } catch (error) {
@@ -173,5 +176,16 @@ export const fetchOperationResults = async (symbol, limit = 50) => {
   } catch (error) {
     console.error("❌ Error al obtener resultados de operación:", error.response?.data || error);
     return [];
+  }
+};
+
+
+export const fetchPaperStatus = async () => {
+  try {
+    const response = await api.get('/paper-trading/status');
+    return response.data;
+  } catch (error) {
+    console.error("❌ Error al obtener estado de paper trading:", error.response?.data || error);
+    return null;
   }
 };

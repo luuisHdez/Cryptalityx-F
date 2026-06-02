@@ -6,7 +6,7 @@ const SocketContext = createContext(null);
 
 export const SocketProvider = ({ children }) => {
   const [socket] = useState(() =>
-    io("https://localhost:8001", {
+    io(`https://${window.location.hostname}:8001`, {
       autoConnect: false,
       withCredentials: true,   // las cookies HTTP-Only se envían solas
       transports: ["websocket"],

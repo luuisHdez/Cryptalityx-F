@@ -4,7 +4,7 @@ import Cookies from 'js-cookie';
 axios.defaults.withCredentials = true;
 // Crea una instancia de Axios para las solicitudes de autenticación
 const authApi = axios.create({
-    baseURL: 'https://localhost:8000/',
+    baseURL: `https://${window.location.hostname}:8000/`,
     withCredentials: true  // ✅ Permite el uso de cookies en solicitudes cross-site
 });
 

@@ -6,13 +6,13 @@ import Cookies from 'js-cookie';
 const PrivateRoute = () => {
   const [isAuthenticated, setIsAuthenticated] = useState(null);
   axios.defaults.withCredentials = true;
-  axios.defaults.baseURL = 'https://localhost:8000';
+  axios.defaults.baseURL = `https://${window.location.hostname}:8000`;
   useEffect(() => {
     const checkAuth = async () => {
       console.log("PrivateRoute se está ejecutando");
       const csrfToken = Cookies.get('csrftoken');
       try {
-        const response = await axios.get("https://localhost:8000/debug-user/", {
+        const response = await axios.get(`https://${window.location.hostname}:8000/debug-user/`, {
           headers: {
             'Content-Type': 'application/json',
             'X-CSRFToken': csrfToken // 🔥 Se añade CSRF Token en la cabecera

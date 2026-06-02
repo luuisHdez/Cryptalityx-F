@@ -5,6 +5,7 @@ import {
   sellOrder
 } from "../../API/APIService";
 import { toast } from 'react-toastify'
+import PaperTradingModal from "./PaperTradingModal";
 
 const ChartControls = ({
   setCandles,
@@ -19,6 +20,7 @@ const ChartControls = ({
     start_date: "",
     end_date: "",
   });
+  const [paperModalOpen, setPaperModalOpen] = useState(false);
 
   const handleSymbolChange = (e) => {
     setCandles([]);
@@ -236,7 +238,9 @@ const ChartControls = ({
           onClick={async () => {
             try {
               console.log("🟢 Ejecutando orden de compra para", symbol);
-              const result = await buyOrder(symbol, toolStates.active_operations, toolStates.active_alerts);
+              const tp = toolStates.take_profit?.value || null;
+              const sl = toolStates.stop_loss?.value || null;
+              const result = await buyOrder(symbol, toolStates.active_operations, toolStates.active_alerts, tp, sl);
               toast.success("✅ Orden de compra ejecutada", { theme: "dark" });
               console.log("🟢 Resultado buyOrder:", result);
             } catch (error) {
@@ -269,7 +273,18 @@ const ChartControls = ({
           <div className="absolute inset-0 z-0 bg-gradient-to-r from-purple-500 to-purple-900 translate-y-full group-hover:translate-y-0 transition-transform duration-200" />
           <span className="relative z-10">Vender</span>
         </button>
+
+        <button
+          type="button"
+          onClick={() => setPaperModalOpen(true)}
+          className="relative overflow-hidden rounded-lg border border-cyan-600 bg-neutral-900 px-3 py-1 text-[10px] font-semibold uppercase text-white transition-all duration-200 hover:translate-x-[-2px] hover:translate-y-[-2px] hover:rounded-md hover:shadow-[2px_2px_0px_#0891b2] active:translate-x-0 active:translate-y-0 active:rounded-lg active:shadow-none group"
+        >
+          <div className="absolute inset-0 z-0 bg-gradient-to-r from-cyan-500 to-cyan-900 translate-y-full group-hover:translate-y-0 transition-transform duration-200" />
+          <span className="relative z-10">📊 ML</span>
+        </button>
       </form>
+
+      <PaperTradingModal isOpen={paperModalOpen} onClose={() => setPaperModalOpen(false)} />
     </div>
   );
 };

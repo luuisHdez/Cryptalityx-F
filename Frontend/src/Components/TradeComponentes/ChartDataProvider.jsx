@@ -311,8 +311,8 @@ const ChartDataProvider = ({ symbol, interval, setSymbol, setInterval, operation
         {Object.entries(toolStates)
           .filter(([key]) => key !== "active_alerts" && key !== "active_operations")
           .map(([tool, { value }]) => {
-            const isAlwaysDisabled = ["take_profit", "stop_loss", "take_benefit"].includes(tool);
-            const isEditable = ["entry_point", "alert_up", "alert_down"].includes(tool);
+            const isAlwaysDisabled = ["take_benefit"].includes(tool);
+            const isEditable = ["entry_point", "alert_up", "alert_down", "take_profit", "stop_loss"].includes(tool);
             return (
               <ToolInput
                 key={tool}
