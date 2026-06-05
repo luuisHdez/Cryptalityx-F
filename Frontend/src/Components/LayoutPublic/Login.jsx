@@ -2,10 +2,6 @@ import { useState } from "react";
 import { useNavigate } from 'react-router-dom';
 import { loginUser, register } from "../../API/auth.api";
 import { ToastContainer, toast } from 'react-toastify';
-import { googleLogin } from "../../API/auth.api";
-import { useGoogleLogin } from '@react-oauth/google';
-import AnimatedButton from "./AnimatedButton";
-import { SiGoogle, SiGithub } from "react-icons/si";
 import SpotlightButton from "./SpotlightButton";
 import { motion, useAnimation } from "framer-motion";
 import { useEffect } from "react";
@@ -55,22 +51,6 @@ const Login = ({ mode }) => {
       }
     }
   };
-
-  const googleLoginHandler = useGoogleLogin({
-    flow: 'auth-code',
-    onSuccess: async (tokenResponse) => {
-      try {
-        const code = tokenResponse.code;
-        if (!code) throw new Error("El authorization code está vacío o no existe.");
-        const data = await googleLogin(code);
-        toast.success("Inicio de sesión con Google exitoso");
-        setTimeout(() => navigate('/'), 1000);
-      } catch (error) {
-        toast.error(error?.response?.data?.error || "Error al iniciar sesión con Google");
-      }
-    },
-    onError: () => toast.error("Error al iniciar sesión con Google"),
-  });
 
   return (
     <div className="w-full px-4 py-12 bg-transparent flex justify-center" style={{ perspective: "1200px" }}>
@@ -193,29 +173,6 @@ const Login = ({ mode }) => {
               </>
             )}
           </p>
-
-          <div className="mt-6">
-            <div className="relative">
-              <div className="absolute inset-0 flex items-center">
-                <div className="w-full border-t border-gray-300" />
-              </div>
-              <div className="relative flex justify-center text-sm">
-                <span className="px-3 bg-black text-white">Or continue with</span>
-              </div>
-            </div>
-
-            <div className="mt-6 grid grid-cols-2 gap-3">
-              <AnimatedButton onClick={() => googleLoginHandler()}
-                className="w-full inline-flex items-center justify-center py-2 px-4 border border-gray-300 rounded-md shadow-sm bg-white text-sm font-medium text-gray-500 hover:bg-gray-50">
-                <SiGoogle className="mr-2 text-lg" />
-              </AnimatedButton>
-
-              <AnimatedButton onClick={() => { }}
-                className="w-full inline-flex items-center justify-center py-2 px-4 border border-gray-300 rounded-md shadow-sm bg-white text-sm font-medium text-gray-500 hover:bg-gray-50">
-                <SiGithub className="mr-2 text-lg" />
-              </AnimatedButton>
-            </div>
-          </div>
         </motion.form>
       </motion.div>
     </div>

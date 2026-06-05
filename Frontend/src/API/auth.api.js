@@ -111,37 +111,6 @@ export const logout = () => {
 };
 
 
-export const googleLogin = async (code) => {
-    const csrfToken = Cookies.get('csrftoken');
-
-    try {
-        const response = await authApi.post('google-oauth/', { code }, {
-            headers: {
-                'Content-Type': 'application/json',
-                'X-CSRFToken': csrfToken
-            },
-                withCredentials: true,  // Si necesitas que las cookies sean enviadas, habilita 'withCredentials'
-            }
-        );
-        return response.data;  // Retorna la respuesta del backend (mensaje de éxito)
-    } catch (error) {
-        // Mejor manejo de errores para poder ver detalles
-        if (error.response) {
-            // Si la respuesta fue un error con código de estado
-            console.error('Error Response:', error.response.data);
-            // Puedes personalizar cómo manejas el error aquí
-            return { error: error.response.data.error || 'Error desconocido desde el servidor' };
-        } else if (error.request) {
-            // Si la solicitud fue hecha pero no recibimos respuesta
-            console.error('Error Request:', error.request);
-            return { error: 'No se recibió respuesta del servidor' };
-        } else {
-            // Si hubo un error durante la configuración de la solicitud
-            console.error('Error Message:', error.message);
-            return { error: error.message };
-        }
-    }
-};
 
 
 

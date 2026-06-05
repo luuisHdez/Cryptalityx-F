@@ -54,7 +54,7 @@ const PaperTradingModal = ({ isOpen, onClose }) => {
     setLoading(true);
     try {
       const res = await fetchPaperStatus();
-      if (res && res.total_trades > 0) {
+      if (res && (res.total_trades > 0 || res.open_trade)) {
         setData(res);
         setUseDummy(false);
       } else {
