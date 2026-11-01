@@ -10,23 +10,25 @@ const cards = [
     href: "/task",
   },
   {
-    title: "Data Driven",
-    color: "bg-indigo-300",
-    description: "Lorem ipsum dolor sit, amet consectetur adipisicing elit. Exercitationem doloremque vitae minima.",
-    lift: true,
-    href: "/trading",
-  },
+  title: "Trading",
+  color: "bg-indigo-300",
+  description: "Gráfica en tiempo real de futuros, alertas, posiciones y señales del modelo en un solo panel.",
+  lift: true,
+  href: "/trading",
+},
   {
     title: "Dutiful",
     color: "bg-red-300",
     description: "Lorem ipsum dolor sit, amet consectetur adipisicing elit. Exercitationem doloremque vitae minima.",
   },
   {
-    title: "Demure",
-    color: "bg-yellow-300",
-    description: "Lorem ipsum dolor sit, amet consectetur adipisicing elit. Exercitationem doloremque vitae minima.",
-    lift: true,
-  },
+  title: "Analytics",
+  color: "bg-yellow-300",
+  description: "Revisa prueba por prueba los backtests de tus modelos: gráfica de señales, parámetros y resultados.",
+  lift: true,
+  href: "/analytics",
+}
+,
 ];
 
 const SpringCards = () => {

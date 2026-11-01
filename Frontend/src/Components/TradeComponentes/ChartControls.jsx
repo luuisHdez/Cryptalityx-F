@@ -1,11 +1,12 @@
 import React, { useState } from "react";
 import {
   updateBinanceData, fetchHistoricalData,
-  submitOperationConfig, stopOperation, buyOrder,
-  sellOrder
+  stopOperation, syncPosition
 } from "../../API/APIService";
 import { toast } from 'react-toastify'
-import PaperTradingModal from "./PaperTradingModal";
+import { DayPicker } from "react-day-picker";
+import "react-day-picker/style.css";
+import IndicatorAlertPanel from "./IndicatorAlertPanel";
 
 const ChartControls = ({
   setCandles,
@@ -20,16 +21,13 @@ const ChartControls = ({
     start_date: "",
     end_date: "",
   });
-  const [paperModalOpen, setPaperModalOpen] = useState(false);
+  const [dateRange, setDateRange] = useState(undefined);
+  const [alertPanelOpen, setAlertPanelOpen] = useState(false);
+  const [dateModalOpen, setDateModalOpen] = useState(false);
 
   const handleSymbolChange = (e) => {
     setCandles([]);
     setSymbol(e.target.value);
-  };
-
-  const handleIntervalChange = (e) => {
-    setCandles([]);
-    setInterval(e.target.value);
   };
 
   const toggleTool = (tool) => {
@@ -45,23 +43,26 @@ const ChartControls = ({
   };
 
   const handleFilterSubmit = async (e) => {
-    e.preventDefault();
+    if (e) e.preventDefault();
+    if (!dateRange?.from || !dateRange?.to) {
+      toast.error("⚠️ Selecciona un rango de fechas", { theme: "dark" });
+      return;
+    }
     try {
-      const result = await updateBinanceData(
-        filters.start_date,
-        filters.end_date,
-        symbol
-      );
+      const startDate = dateRange.from.toISOString().split("T")[0];
+      const endDate = dateRange.to.toISOString().split("T")[0];
+      const result = await updateBinanceData(startDate, endDate, symbol);
       console.log("✅ Datos actualizados:", result);
 
-      // Si el update fue exitoso y hay cripto + intervalos válidos, recarga gráfica
       if (symbol && interval) {
         const updatedData = await fetchHistoricalData(symbol, interval);
         setCandles(updatedData);
-        setSymbol(symbol); // opcional: sincroniza visualmente
+        setSymbol(symbol);
       }
+      toast.success("✅ Datos cargados", { theme: "dark" });
     } catch (error) {
       console.error("❌ Error en la petición:", error);
+      toast.error("❌ Error al cargar datos", { theme: "dark" });
     }
   };
 
@@ -82,7 +83,7 @@ const ChartControls = ({
 
         <select
           value={interval}
-          onChange={handleIntervalChange}
+          onChange={(e) => { setCandles([]); setInterval(e.target.value); }}
           className="min-w-[50px] bg-gray-800 text-white border border-blue-700 rounded px-1 py-1"
         >
           <option value="1m">1m</option>
@@ -132,159 +133,101 @@ const ChartControls = ({
 
       <form
         onSubmit={handleFilterSubmit}
-        className="flex flex-wrap items-center gap-1"
+        className="flex items-center justify-center gap-2 w-full flex-nowrap"
       >
-        <input
-          type="date"
-          name="start_date"
-          value={filters.start_date}
-          onChange={handleFilterChange}
-          className="bg-gray-800 text-white border border-blue-700 rounded px-1 py-0.5"
-        />
-        <input
-          type="date"
-          name="end_date"
-          value={filters.end_date}
-          onChange={handleFilterChange}
-          className="bg-gray-800 text-white border border-blue-700 rounded px-1 py-0.5"
-        />
-        <button
-          type="submit"
-          className="relative min-w-[90px] overflow-hidden rounded-lg border border-blue-700 bg-neutral-900 px-3 py-1 text-[10px] font-semibold uppercase text-white transition-all duration-200 hover:translate-x-[-2px] hover:translate-y-[-2px] hover:rounded-md hover:shadow-[2px_2px_0px_#1e3a8a] active:translate-x-0 active:translate-y-0 active:rounded-lg active:shadow-none disabled:opacity-50 disabled:cursor-not-allowed group"
-        >
-          <div className="absolute inset-0 z-0 bg-gradient-to-r from-blue-500 to-blue-900 translate-y-full group-hover:translate-y-0 transition-transform duration-200" />
-          <span className="relative z-10">Apply</span>
-        </button>
-
 
         <button
           type="button"
-          onClick={async () => {
-            try {
-              if (!toolStates.active_alerts) {
-                toast.error("⚠️ Activa la operación antes de enviar.", {
-                  theme: "dark",
-                });
-                return;
-              }
-              const values = {
-                alert_up: toolStates.alert_up?.value,
-                alert_down: toolStates.alert_down?.value,
-                active_alerts: !!toolStates.active_alerts,
-                active_operations: !!toolStates.active_operations,
-              };
-
-              for (const key of ["alert_up", "alert_down"]) {
-                const val = values[key];
-                if (val === undefined || val === null || val === "") {
-                  toast.error(`❌ ${key} está vacío`, {
-                    theme: "dark",
-                  });
-                  return;
-                }
-
-                const stringVal = Number(val).toFixed(4);
-                if (!/^\d+\.\d{4}$/.test(stringVal)) {
-                  toast.error(`❌ ${key} debe tener exactamente 4 decimales`, {
-                    theme: "dark",
-                  });
-                  return;
-                }
-
-                values[key] = stringVal;
-              }
-
-              const result = await submitOperationConfig(symbol, values);
-              console.log(symbol, values);
-              toast.success("✅ Config enviada correctamente", {
-                theme: "dark",
-              });
-            } catch (error) {
-              toast.error("❌ Fallo al enviar configuración.", {
-                theme: "dark",
-              });
-              console.error("❌ Error:", error);
-            }
-          }}
-          className="relative min-w-[90px] overflow-hidden rounded-lg border border-yellow-700 bg-neutral-900 px-3 py-1 text-[10px] font-semibold uppercase text-white transition-all duration-200 hover:translate-x-[-2px] hover:translate-y-[-2px] hover:rounded-md hover:shadow-[2px_2px_0px_#a16207] active:translate-x-0 active:translate-y-0 active:rounded-lg active:shadow-none disabled:opacity-50 disabled:cursor-not-allowed group"
+          onClick={() => setDateModalOpen(true)}
+          className="px-4 py-1.5 rounded-md text-xs font-medium text-blue-300 border border-blue-800/50 bg-blue-950/30 hover:bg-blue-900/50 hover:shadow-[0_0_8px_rgba(59,130,246,0.3)] active:scale-95 transition-all duration-150"
         >
-          <div className="absolute inset-0 z-0 bg-gradient-to-r from-yellow-500 to-yellow-900 translate-y-full group-hover:translate-y-0 transition-transform duration-200" />
-          <span className="relative z-10">SendConfig</span>
+          📅 Rango
         </button>
-
 
         <button
           type="button"
           onClick={async () => {
             try {
               const result = await stopOperation(symbol);
-              toast.success("🛑 Operación detenida exitosamente", { theme: "dark" });
-              console.log("🛑 Resultado stopOperation:", result);
+              toast.success("🛑 Operación detenida", { theme: "dark" });
             } catch (error) {
-              toast.error("❌ Error al detener la operación", { theme: "dark" });
+              toast.error("❌ Error al detener", { theme: "dark" });
             }
           }}
-          className="relative min-w-[90px] overflow-hidden rounded-lg border border-red-700 bg-neutral-900 px-3 py-1 text-[10px] font-semibold uppercase text-white transition-all duration-200 hover:translate-x-[-2px] hover:translate-y-[-2px] hover:rounded-md hover:shadow-[2px_2px_0px_#991b1b] active:translate-x-0 active:translate-y-0 active:rounded-lg active:shadow-none disabled:opacity-50 disabled:cursor-not-allowed group"
+          className="px-4 py-1.5 rounded-md text-xs font-medium text-red-300 border border-red-800/50 bg-red-950/30 hover:bg-red-900/50 hover:shadow-[0_0_8px_rgba(239,68,68,0.3)] active:scale-95 transition-all duration-150"
         >
-          <div className="absolute inset-0 z-0 bg-gradient-to-r from-red-500 to-red-900 translate-y-full group-hover:translate-y-0 transition-transform duration-200" />
-          <span className="relative z-10">Stop Operations</span>
+          ⛔ Stop
         </button>
 
-
-
+        <button
+          type="button"
+          onClick={() => setAlertPanelOpen(true)}
+          className="px-4 py-1.5 rounded-md text-xs font-medium text-orange-300 border border-orange-800/50 bg-orange-950/30 hover:bg-orange-900/50 hover:shadow-[0_0_8px_rgba(249,115,22,0.3)] active:scale-95 transition-all duration-150"
+        >
+          🔔 Alerts
+        </button>
 
         <button
           type="button"
           onClick={async () => {
             try {
-              console.log("🟢 Ejecutando orden de compra para", symbol);
-              const tp = toolStates.take_profit?.value || null;
-              const sl = toolStates.stop_loss?.value || null;
-              const result = await buyOrder(symbol, toolStates.active_operations, toolStates.active_alerts, tp, sl);
-              toast.success("✅ Orden de compra ejecutada", { theme: "dark" });
-              console.log("🟢 Resultado buyOrder:", result);
+              const result = await syncPosition(symbol);
+              if (result.status === "success") {
+                toast.success(`✅ Entry: ${result.entry_point}`, { theme: "dark" });
+              } else {
+                toast.info("ℹ️ Sin posición abierta", { theme: "dark" });
+              }
             } catch (error) {
-              toast.error("❌ Error al ejecutar orden de compra", { theme: "dark" });
-              console.error("❌ Error:", error);
+              toast.error("❌ Error sync", { theme: "dark" });
             }
           }}
-          className="relative overflow-hidden rounded-lg border border-green-600 bg-neutral-900 px-3 py-1 text-[10px] font-semibold uppercase text-white transition-all duration-200 hover:translate-x-[-2px] hover:translate-y-[-2px] hover:rounded-md hover:shadow-[2px_2px_0px_#15803d] active:translate-x-0 active:translate-y-0 active:rounded-lg active:shadow-none disabled:opacity-50 disabled:cursor-not-allowed group"
+          className="px-4 py-1.5 rounded-md text-xs font-medium text-teal-300 border border-teal-800/50 bg-teal-950/30 hover:bg-teal-900/50 hover:shadow-[0_0_8px_rgba(20,184,166,0.3)] active:scale-95 transition-all duration-150"
         >
-          <div className="absolute inset-0 z-0 bg-gradient-to-r from-green-500 to-green-900 translate-y-full group-hover:translate-y-0 transition-transform duration-200" />
-          <span className="relative z-10">Buy</span>
-        </button>
-
-
-
-        <button
-          type="button"
-          onClick={async () => {
-            try {
-              console.log("funcion ejecutando", symbol);
-              const result = await sellOrder(symbol, toolStates.active_operations, toolStates.active_alerts); // 🔴 Llama a la API
-              toast.success("✅ Orden de venta ejecutada", { theme: "dark" });
-              console.log("🔴 Resultado sellOrder:", result);
-            } catch (error) {
-              toast.error("❌ Error al ejecutar orden de venta", { theme: "dark" });
-            }
-          }}
-          className="relative overflow-hidden rounded-lg border border-purple-600 bg-neutral-900 px-3 py-1 text-[10px] font-semibold uppercase text-white transition-all duration-200 hover:translate-x-[-2px] hover:translate-y-[-2px] hover:rounded-md hover:shadow-[2px_2px_0px_#6b21a8] active:translate-x-0 active:translate-y-0 active:rounded-lg active:shadow-none disabled:opacity-50 disabled:cursor-not-allowed group"
-        >
-          <div className="absolute inset-0 z-0 bg-gradient-to-r from-purple-500 to-purple-900 translate-y-full group-hover:translate-y-0 transition-transform duration-200" />
-          <span className="relative z-10">Vender</span>
-        </button>
-
-        <button
-          type="button"
-          onClick={() => setPaperModalOpen(true)}
-          className="relative overflow-hidden rounded-lg border border-cyan-600 bg-neutral-900 px-3 py-1 text-[10px] font-semibold uppercase text-white transition-all duration-200 hover:translate-x-[-2px] hover:translate-y-[-2px] hover:rounded-md hover:shadow-[2px_2px_0px_#0891b2] active:translate-x-0 active:translate-y-0 active:rounded-lg active:shadow-none group"
-        >
-          <div className="absolute inset-0 z-0 bg-gradient-to-r from-cyan-500 to-cyan-900 translate-y-full group-hover:translate-y-0 transition-transform duration-200" />
-          <span className="relative z-10">📊 ML</span>
+          🔄 Sync
         </button>
       </form>
 
-      <PaperTradingModal isOpen={paperModalOpen} onClose={() => setPaperModalOpen(false)} />
+      <IndicatorAlertPanel isOpen={alertPanelOpen} onClose={() => setAlertPanelOpen(false)} symbol={symbol} />
+
+      {/* Modal de rango de fechas */}
+      {dateModalOpen && (
+        <div
+          className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-sm"
+          onClick={() => setDateModalOpen(false)}
+        >
+          <div
+            className="bg-[#0b0e11] border border-slate-700 rounded-xl overflow-hidden shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between px-5 py-3 bg-[#131722] border-b border-slate-700">
+              <h2 className="text-sm font-semibold text-white">Seleccionar Rango</h2>
+              <button onClick={() => setDateModalOpen(false)} className="text-gray-400 hover:text-white text-xl leading-none px-1">✕</button>
+            </div>
+            <div className="p-4">
+              <DayPicker
+                mode="range"
+                required
+                selected={dateRange}
+                onSelect={setDateRange}
+              />
+            </div>
+            <div className="px-5 py-3 bg-[#131722] border-t border-slate-700 flex justify-between items-center">
+              <span className="text-[10px] text-gray-400">
+                {dateRange?.from && dateRange?.to
+                  ? `${dateRange.from.toLocaleDateString()} → ${dateRange.to.toLocaleDateString()}`
+                  : "Selecciona inicio y fin"}
+              </span>
+              <button
+                onClick={() => { handleFilterSubmit(); setDateModalOpen(false); }}
+                disabled={!dateRange?.from || !dateRange?.to}
+                className="text-[10px] px-4 py-1.5 border border-blue-700 rounded text-white bg-blue-900/50 hover:bg-blue-800/70 transition font-semibold disabled:opacity-40 disabled:cursor-not-allowed"
+              >
+                Apply
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

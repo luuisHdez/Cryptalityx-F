@@ -10,13 +10,19 @@ const api = axios.create({
 api.interceptors.response.use(
   res => res,
   async error => {
-    if (error.response?.status === 401) {
+    const originalRequest = error.config;
+
+    // Reintenta el refresh una sola vez por petición para evitar bucles infinitos.
+    if (error.response?.status === 401 && originalRequest && !originalRequest._retry) {
+      originalRequest._retry = true;
       try {
         await refreshToken(); // llama al backend Django
-        return api(error.config); // reintenta la solicitud
+        return api(originalRequest); // reintenta la solicitud original una vez
       } catch (err) {
         console.error("❌ Falló refreshToken:", err);
-        window.location.href = "/login";
+        if (window.location.pathname !== "/login") {
+          window.location.href = "/login";
+        }
       }
     }
     return Promise.reject(error);
@@ -129,63 +135,190 @@ export const stopOperation = async (symbol) => {
   }
 };
 
-export const buyOrder = async (symbol, active_operations = false, active_alerts = false, take_profit = null, stop_loss = null) => {
+// 📊 Enviar configuración de alertas de indicadores
+export const submitIndicatorAlertConfig = async (symbol, config) => {
   try {
     const payload = {
       symbol: symbol.toUpperCase(),
-      active_operations: !!active_operations,
-      active_alerts: !!active_alerts,
+      ...config,
     };
-    if (take_profit) payload.take_profit = take_profit;
-    if (stop_loss) payload.stop_loss = stop_loss;
-
-    const response = await api.post(`/buy-order`, payload);
+    const response = await api.post('/indicator-alert-config', payload);
     return response.data;
   } catch (error) {
-    console.error("❌ Error al ejecutar orden de compra:", error.response?.data || error);
+    console.error("❌ Error al enviar config de alertas de indicadores:", error.response?.data || error);
     throw error;
   }
 };
 
-export const sellOrder = async (symbol, active_operations = false, active_alerts = false) => {
+
+// 🔄 Sincronizar posición abierta desde Binance
+export const syncPosition = async (symbol) => {
   try {
-    const payload = { symbol: symbol.toUpperCase(),
-      active_operations: !!active_operations,
-      active_alerts: !!active_alerts,
-     };
-    console.log(payload)
-    const response = await api.post(`/sell-order`, payload);
+    const payload = { symbol: symbol.toUpperCase() };
+    const response = await api.post('/sync-position', payload);
     return response.data;
   } catch (error) {
-    console.error("❌ Error al ejecutar orden de venta:", error.response?.data || error);
+    console.error("❌ Error al sincronizar posición:", error.response?.data || error);
     throw error;
   }
 };
 
-export const fetchOperationResults = async (symbol, limit = 50) => {
-  if (!symbol) {
-    console.warn("⚠️ Symbol no definido para fetchOperationResults.");
-    return [];
-  }
 
+// 📋 Obtener historial de órdenes desde Binance
+export const fetchOrderHistory = async (symbol, period = "1d") => {
   try {
-    const response = await api.get(`/operation-results/${symbol.toUpperCase()}`, {
-      params: { limit },
+    const response = await api.get(`/order-history`, {
+      params: { symbol: symbol.toUpperCase(), period },
     });
     return response.data;
   } catch (error) {
-    console.error("❌ Error al obtener resultados de operación:", error.response?.data || error);
+    console.error("❌ Error al obtener historial de órdenes:", error.response?.data || error);
     return [];
   }
 };
 
 
-export const fetchPaperStatus = async () => {
+
+// ============================================================================
+// FUTUROS USDT-M — Panel de trading (feature futures-trading-panel)
+// Estas funciones consumen los endpoints de futuros.
+// ============================================================================
+
+// 🟢/🔴 Abrir posición de futuros LONG/SHORT a mercado
+export const openFuturesPosition = async (symbol, side, amountUsdt, leverage, marginMode) => {
   try {
-    const response = await api.get('/paper-trading/status');
+    const payload = {
+      symbol: symbol.toUpperCase(),
+      side,                    // "LONG" | "SHORT"
+      amount_usdt: Number(amountUsdt),
+      leverage: Number(leverage),
+      margin_mode: marginMode, // "CROSSED" | "ISOLATED"
+    };
+    const response = await api.post(`/futures/open-position`, payload);
     return response.data;
   } catch (error) {
-    console.error("❌ Error al obtener estado de paper trading:", error.response?.data || error);
+    // Propaga el detalle del backend (msg de Binance) para mostrarlo al usuario.
+    const detail = error.response?.data?.detail || error.message;
+    throw new Error(detail);
+  }
+};
+
+// ❌ Cerrar la posición de futuros abierta
+export const closeFuturesPosition = async (symbol) => {
+  try {
+    const payload = { symbol: symbol.toUpperCase() };
+    const response = await api.post(`/futures/close-position`, payload);
+    return response.data;
+  } catch (error) {
+    const detail = error.response?.data?.detail || error.message;
+    throw new Error(detail);
+  }
+};
+
+// ℹ️ Filtros del símbolo (step_size, min_qty, min_notional, max_leverage, price)
+export const fetchFuturesSymbolInfo = async (symbol) => {
+  try {
+    const response = await api.get(`/futures/symbol-info`, {
+      params: { symbol: symbol.toUpperCase() },
+    });
+    return response.data;
+  } catch (error) {
+    console.error("❌ Error al obtener symbol-info de futuros:", error.response?.data || error);
     return null;
+  }
+};
+
+
+// ============================================================================
+// ANALYTICS — corridas de backtest guardadas por el laboratorio (backtest_runs)
+// Especificación: Tb-AI_M/ANALYTICS_BACKTESTS.md (Fase 3/4)
+// ============================================================================
+
+// 📋 Lista de corridas (sin imagen, código ni señales). Filtros opcionales.
+export const fetchBacktests = async ({ model, interval, review_status } = {}) => {
+  const params = {};
+  if (model) params.model = model;
+  if (interval) params.interval = interval;
+  if (review_status) params.review_status = review_status;
+  const response = await api.get(`/backtests`, { params });
+  return response.data;
+};
+
+// 🔎 Detalle de una corrida (incluye señales, código y la corrida anterior).
+export const fetchBacktest = async (id) => {
+  const response = await api.get(`/backtests/${id}`);
+  return response.data;
+};
+
+// 🤖 Señales en vivo (long/short) del rango [fromMs, toMs] para el símbolo e intervalo.
+export const fetchLiveSignals = async (symbol, interval, fromMs, toMs = null) => {
+  try {
+    const params = { from_ms: Math.max(0, Math.floor(fromMs)) };
+    if (toMs != null) params.to_ms = Math.floor(toMs);
+    const response = await api.get(`/live-signals/${symbol.toUpperCase()}/${interval}`, { params });
+    return response.data;
+  } catch (error) {
+    console.error("❌ Error al obtener señales en vivo:", error.response?.data || error);
+    return [];
+  }
+};
+
+// ✈️ Vinculación de Telegram con el usuario actual (la usa el bot).
+export const fetchTelegramLink = async () => {
+  const response = await api.get("/telegram-link");
+  return response.data;
+};
+
+export const saveTelegramLink = async (telegramId) => {
+  const response = await api.post("/telegram-link", { telegram_id: telegramId });
+  return response.data;
+};
+
+export const deleteTelegramLink = async () => {
+  const response = await api.delete("/telegram-link");
+  return response.data;
+};
+
+// 🕯️ Velas del tramo de evaluación, resampleadas al intervalo de la corrida.
+export const fetchBacktestCandles = async (id) => {
+  const response = await api.get(`/backtests/${id}/candles`);
+  return response.data;
+};
+
+// 🖼️ Imagen PNG de respaldo. Devuelve un object URL (revocar al cerrar).
+export const fetchBacktestImageUrl = async (id) => {
+  const response = await api.get(`/backtests/${id}/image`, { responseType: "blob" });
+  return URL.createObjectURL(response.data);
+};
+
+// 🧪 Valores iniciales para una nueva prueba (última corrida del mismo modelo e intervalo).
+export const fetchBacktestDefaults = async (model, interval) => {
+  const response = await api.get("/backtest-jobs/defaults", { params: { model, interval } });
+  return response.data;
+};
+
+// ▶️ Lanzar un backtest del laboratorio con la config y los hiperparámetros del formulario.
+export const startBacktestJob = async ({ model, interval, config, hyperparams }) => {
+  const response = await api.post("/backtest-jobs", { model, interval, config, hyperparams });
+  return response.data;
+};
+
+// ⏳ Estado de la corrida lanzada desde el front.
+export const fetchBacktestJob = async () => {
+  const response = await api.get("/backtest-jobs/current");
+  return response.data;
+};
+
+// 📝 Guardar la revisión manual de una corrida.
+export const updateBacktestReview = async (id, reviewStatus, reviewNotes) => {
+  try {
+    const response = await api.patch(`/backtests/${id}/review`, {
+      review_status: reviewStatus,
+      review_notes: reviewNotes || null,
+    });
+    return response.data;
+  } catch (error) {
+    const detail = error.response?.data?.detail || error.message;
+    throw new Error(typeof detail === "string" ? detail : "No se pudo guardar la revisión");
   }
 };

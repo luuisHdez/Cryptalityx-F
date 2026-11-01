@@ -1,10 +1,15 @@
-import React, { useEffect, useRef } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import {
   createChart,
   CandlestickSeries,
   HistogramSeries,
   CrosshairMode,
+  createSeriesMarkers,
 } from "lightweight-charts";
+
+// Flechas de señal ML: mismo estilo que Analytics (long ▲ verde bajo la vela,
+// short ▼ roja sobre la vela). Clic en la vela muestra la probabilidad.
+const SIGNAL_COLORS = { long: "#0ecb81", short: "#f6465d" };
 
 const TOOL_COLORS = {
   stop_loss: "red",
@@ -15,7 +20,38 @@ const TOOL_COLORS = {
   alert_down: "purple",
 };
 
-const CandleChart = ({ data, toolStates, onLoadMore }) => {
+// Zona horaria de visualización: UTC-6. Los datos llegan en UTC real desde el
+// backend; aquí solo se DESPLAZA la presentación (etiquetas del eje y tooltip)
+// para que el usuario vea su hora local sin alterar los timestamps.
+const DISPLAY_UTC_OFFSET_HOURS = -6;
+const DISPLAY_OFFSET_SECONDS = DISPLAY_UTC_OFFSET_HOURS * 3600;
+
+// Formatea un timestamp (segundos UTC) a una etiqueta en la zona de display.
+// A PRUEBA DE FALLOS: lightweight-charts puede pasar el tiempo como número
+// (segundos) o como objeto {year,month,day} en escalas de día. Si no es un
+// número válido, devolvemos una cadena vacía en vez de lanzar excepción (una
+// excepción aquí congela el render del gráfico).
+const formatDisplayTime = (time) => {
+  if (typeof time !== "number" || !Number.isFinite(time)) return "";
+  const d = new Date((time + DISPLAY_OFFSET_SECONDS) * 1000);
+  if (isNaN(d.getTime())) return "";
+  const hh = String(d.getUTCHours()).padStart(2, "0");
+  const mm = String(d.getUTCMinutes()).padStart(2, "0");
+  return `${hh}:${mm}`;
+};
+
+const formatDisplayDateTime = (time) => {
+  if (typeof time !== "number" || !Number.isFinite(time)) return "";
+  const d = new Date((time + DISPLAY_OFFSET_SECONDS) * 1000);
+  if (isNaN(d.getTime())) return "";
+  try {
+    return d.toISOString().slice(0, 16).replace("T", " ");
+  } catch {
+    return "";
+  }
+};
+
+const CandleChart = ({ data, signals = [], toolStates, onLoadMore }) => {
   const chartContainerRef = useRef(null);
   const priceChartRef = useRef(null);
   const volumeChartRef = useRef(null);
@@ -31,9 +67,20 @@ const CandleChart = ({ data, toolStates, onLoadMore }) => {
 
   const linesRef = useRef({});
 
+  // Marcadores de señales ML y vela seleccionada (segundos UTC) para mostrar la prob.
+  const markersRef = useRef(null);
+  const [selectedSignalTime, setSelectedSignalTime] = useState(null);
+  const signalsRef = useRef(signals);
+  signalsRef.current = signals;
+
   const earliestLoadedTimeRef = useRef(null);
   const isLoadingMoreRef = useRef(false);
   const onLoadMoreRef = useRef(onLoadMore);
+
+  // Estado del último render para decidir entre setData (full) y update (incremental)
+  const lastLenRef = useRef(0);
+  const lastFirstTimeRef = useRef(null);
+  const lastBarTimeRef = useRef(null);
 
   useEffect(() => {
     onLoadMoreRef.current = onLoadMore;
@@ -61,7 +108,14 @@ const CandleChart = ({ data, toolStates, onLoadMore }) => {
         scaleMargins: { top: 0.1, bottom: 0.1 },
         minimumWidth: 80,
       },
-      timeScale: { visible: false },
+      // Eje de tiempo en hora de display (UTC-6) sin alterar los datos.
+      timeScale: {
+        visible: true,
+        tickMarkFormatter: (time) => formatDisplayTime(time),
+      },
+      localization: {
+        timeFormatter: (time) => formatDisplayDateTime(time),
+      },
     });
 
     candleSeries.current = priceChart.current.addSeries(
@@ -79,6 +133,16 @@ const CandleChart = ({ data, toolStates, onLoadMore }) => {
         },
       }
     );
+
+    markersRef.current = createSeriesMarkers(candleSeries.current, []);
+
+    // Clic sobre una vela con señal -> seleccionarla (muestra la probabilidad);
+    // clic en otra vela la deselecciona.
+    priceChart.current.subscribeClick((param) => {
+      if (typeof param?.time !== "number") return;
+      const hit = signalsRef.current.some((s) => Math.floor(s.ts / 1000) === param.time);
+      setSelectedSignalTime((prev) => (hit && prev !== param.time ? param.time : null));
+    });
 
     volumeChart.current = createChart(volumeChartRef.current, {
       layout: {
@@ -103,6 +167,10 @@ const CandleChart = ({ data, toolStates, onLoadMore }) => {
         visible: true,
         timeVisible: true,
         secondsVisible: false,
+        tickMarkFormatter: (time) => formatDisplayTime(time),
+      },
+      localization: {
+        timeFormatter: (time) => formatDisplayDateTime(time),
       },
     });
 
@@ -182,8 +250,8 @@ const CandleChart = ({ data, toolStates, onLoadMore }) => {
       const isBullish = candle.close >= candle.open;
       const color = isBullish ? "#0ecb81" : "#f6465d";
 
-      const date = new Date(candle.time * 1000)
-        .toLocaleString("sv-SE", { timeZone: "UTC" });
+      // Hora en la zona de display (UTC-6) sobre el timestamp UTC real.
+      const date = formatDisplayDateTime(candle.time);
 
       legendTime.textContent = date;
       legendOpen.textContent = `OPEN: ${candle.open}`;
@@ -263,28 +331,84 @@ const CandleChart = ({ data, toolStates, onLoadMore }) => {
 
     return () => {
       resizeObserver.disconnect();
+      markersRef.current = null;
       priceChart.current.remove();
       volumeChart.current.remove();
     };
   }, []);
 
+
+
   useEffect(() => {
-    if (!data?.length) return;
+    if (!candleSeries.current) return;
 
-    earliestLoadedTimeRef.current = data[0].time;
+    // Al vaciar (cambio de símbolo/intervalo) reseteamos el tracking y limpiamos
+    // las series para no arrastrar estado del intervalo anterior.
+    if (!data?.length) {
+      lastLenRef.current = 0;
+      lastFirstTimeRef.current = null;
+      lastBarTimeRef.current = null;
+      candleSeries.current.setData([]);
+      volumeSeries.current.setData([]);
+      return;
+    }
 
-    candleSeries.current.setData(data);
+    const first = data[0];
+    const last = data[data.length - 1];
 
-    volumeSeries.current.setData(
-      data.map(c => ({
-        time: c.time,
-        value: Number(c.volume || c.v || c.k?.v || 0),
-        color:
-          c.close >= c.open
-            ? "rgba(14,203,129,0.5)"
-            : "rgba(246,70,93,0.5)",
-      }))
-    );
+    const volumeBar = (c) => ({
+      time: c.time,
+      value: Number(c.volume || c.v || c.k?.v || 0),
+      color:
+        c.close >= c.open
+          ? "rgba(14,203,129,0.5)"
+          : "rgba(246,70,93,0.5)",
+    });
+
+    // ¿Es una actualización incremental de la última vela?
+    // Ocurre cuando el array conserva su longitud y su primera vela, y solo
+    // cambia la última (tick en vivo) o se agregó exactamente una vela nueva.
+    const sameStart = lastFirstTimeRef.current === first.time;
+    // Solo es update incremental si además el tiempo de la última vela no
+    // retrocede (lightweight-charts exige orden ascendente en update()).
+    const timeNotBackwards =
+      lastBarTimeRef.current == null || last.time >= lastBarTimeRef.current;
+    const isLiveUpdate =
+      sameStart &&
+      timeNotBackwards &&
+      (data.length === lastLenRef.current ||
+        data.length === lastLenRef.current + 1);
+
+    let didLiveUpdate = false;
+    if (isLiveUpdate) {
+      try {
+        // update() actualiza/appendea solo la última vela en O(1), sin redibujar todo.
+        candleSeries.current.update({
+          time: last.time,
+          open: Number(last.open),
+          high: Number(last.high),
+          low: Number(last.low),
+          close: Number(last.close),
+        });
+        volumeSeries.current.update(volumeBar(last));
+        didLiveUpdate = true;
+      } catch (e) {
+        // Si el dato llega fuera de orden, caemos a redibujado completo.
+        didLiveUpdate = false;
+      }
+    }
+
+    if (!didLiveUpdate) {
+      // Carga inicial / cambio de símbolo o intervalo / prepend de histórico:
+      // redibujado completo (poco frecuente).
+      earliestLoadedTimeRef.current = first.time;
+      candleSeries.current.setData(data);
+      volumeSeries.current.setData(data.map(volumeBar));
+    }
+
+    lastLenRef.current = data.length;
+    lastFirstTimeRef.current = first.time;
+    lastBarTimeRef.current = last.time;
   }, [data]);
 
   useEffect(() => {
@@ -313,6 +437,38 @@ const CandleChart = ({ data, toolStates, onLoadMore }) => {
       }
     });
   }, [toolStates, data]);
+
+  // Marcadores de señales ML. Va después del efecto de [data] para asignarse
+  // sobre las velas ya cargadas. Solo las señales dentro del rango cargado (el
+  // marcador debe coincidir con una vela existente). Se recalcula al cambiar
+  // las señales, la selección o el rango, no en cada tick de la vela en curso.
+  const firstTime = data?.[0]?.time;
+  const lastTime = data?.length ? data[data.length - 1].time : undefined;
+  useEffect(() => {
+    if (!markersRef.current) return;
+    if (firstTime == null) {
+      markersRef.current.setMarkers([]);
+      return;
+    }
+    markersRef.current.setMarkers(
+      signals
+        .map((s) => ({ ...s, time: Math.floor(s.ts / 1000) }))
+        .filter((s) => s.time >= firstTime && s.time <= lastTime)
+        .sort((a, b) => a.time - b.time)
+        .map((s) => {
+          const long = s.model === "long";
+          const selected = s.time === selectedSignalTime;
+          return {
+            time: s.time,
+            position: long ? "belowBar" : "aboveBar",
+            shape: long ? "arrowUp" : "arrowDown",
+            color: long ? SIGNAL_COLORS.long : SIGNAL_COLORS.short,
+            size: selected ? 2 : 1,
+            text: selected ? `${(s.prob * 100).toFixed(0)}%` : "",
+          };
+        })
+    );
+  }, [signals, selectedSignalTime, firstTime, lastTime]);
 
   return (
     <div

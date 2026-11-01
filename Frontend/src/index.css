@@ -22,3 +22,126 @@ html, body, #root {
   
 
   
+
+/* Oculta la barra de scroll sin quitar el scroll (rueda, trackpad, teclado). */
+.no-scrollbar {
+  scrollbar-width: none;      /* Firefox */
+  -ms-overflow-style: none;   /* Edge antiguo */
+}
+.no-scrollbar::-webkit-scrollbar {
+  display: none;              /* Chrome, Safari */
+}
+
+/* Chart loader animation */
+.chart-loader {
+  display: inline-grid;
+}
+.chart-loader:before,
+.chart-loader:after {
+  content: "";
+  height: 27px;
+  aspect-ratio: 5;
+  --c: #36d7b7 90deg, #0000 0;
+  background:
+    conic-gradient(from 135deg at top, var(--c)),
+    conic-gradient(from -45deg at bottom, var(--c)) 12.5% 100%;
+  background-size: 20% 50%;
+  background-repeat: repeat-x;
+  clip-path: inset(0 100% 0 0);
+  animation: l9 1s infinite linear;
+}
+.chart-loader:after {
+  scale: -1 1;
+}
+@keyframes l9 {
+  90%, to { clip-path: inset(0); }
+}
+
+/* Dark theme for react-day-picker */
+.rdp-root {
+  --rdp-accent-color: #2563eb;
+  --rdp-accent-background-color: #1e3a8a;
+  --rdp-range_middle-background-color: rgba(37, 99, 235, 0.2);
+  --rdp-range_middle-color: #fff;
+  --rdp-day_button-border-radius: 6px;
+  --rdp-day_button-height: 32px;
+  --rdp-day_button-width: 32px;
+  color: #fff;
+  font-size: 0.75rem;
+}
+.rdp-root .rdp-month_caption {
+  color: #fff;
+  font-weight: 600;
+}
+.rdp-root .rdp-weekday {
+  color: #6b7280;
+  font-size: 0.65rem;
+}
+.rdp-root .rdp-day button {
+  color: #e5e7eb;
+}
+.rdp-root .rdp-day button:hover {
+  background-color: #1e3a8a;
+}
+.rdp-root .rdp-day.rdp-selected button,
+.rdp-root .rdp-day.rdp-range_start button,
+.rdp-root .rdp-day.rdp-range_end button {
+  background-color: #2563eb;
+  color: #fff;
+}
+.rdp-root .rdp-day.rdp-range_middle button {
+  background-color: rgba(37, 99, 235, 0.15);
+  color: #fff;
+}
+.rdp-root .rdp-day.rdp-outside button {
+  color: #4b5563;
+}
+.rdp-root .rdp-nav button {
+  color: #fff;
+}
+.rdp-root .rdp-nav button:hover {
+  background-color: #374151;
+}
+
+/* Trading slider styles */
+.trading-slider {
+  -webkit-appearance: none;
+  appearance: none;
+  height: 4px;
+  border-radius: 2px;
+  background: #374151;
+  outline: none;
+  cursor: pointer;
+}
+.trading-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  cursor: pointer;
+  border: 2px solid;
+}
+.trading-slider-buy::-webkit-slider-thumb {
+  background: #16a34a;
+  border-color: #22c55e;
+}
+.trading-slider-sell::-webkit-slider-thumb {
+  background: #dc2626;
+  border-color: #ef4444;
+}
+.trading-slider::-moz-range-thumb {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  cursor: pointer;
+  border: 2px solid;
+}
+.trading-slider-buy::-moz-range-thumb {
+  background: #16a34a;
+  border-color: #22c55e;
+}
+.trading-slider-sell::-moz-range-thumb {
+  background: #dc2626;
+  border-color: #ef4444;
+}

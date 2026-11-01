@@ -1,7 +1,7 @@
 import axios from 'axios';
 
 // Configura la URL base de tu servidor FastAPI
-const API_BASE_URL = "http://127.0.0.1:8002"; // <-- Cambia esta IP por tu IP local si quieres acceder desde celular
+const API_BASE_URL = "https://127.0.0.1:8002"; // <-- Cambia esta IP por tu IP local si quieres acceder desde celular
 
 // Función para manejar errores de fetch
 async function fetchWithErrorHandling(url, options = {}) {

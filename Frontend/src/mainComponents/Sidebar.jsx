@@ -27,7 +27,7 @@ const Sidebar = () => {
       <div
         onMouseEnter={() => setOpen(true)}
         onMouseLeave={() => setOpen(false)}
-        className="fixed top-0 left-0 z-50 h-screen"
+        className="fixed top-0 left-0 z-50 h-screen hidden md:block"
       >
         <motion.nav
           layout

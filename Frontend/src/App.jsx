@@ -8,6 +8,7 @@ import PrivateRoute from "./Components/PrivateRoute";
 import "./API/trade_api"; // Solo para que window.apiTrade exista
 import Dashboard from "./Components/AutomationVideoComponents/Dashboard";
 import LayoutPublic from "./Components/LayoutPublic/LayoutPublic";
+import Analytics from "./Components/AnalyticsComponents/Analytics";
 
 
 function App() {
@@ -20,6 +21,7 @@ function App() {
             <Route path="trading" element={<Main />}>
             </Route>
             <Route path="task" element={<Dashboard />} />
+            <Route path="analytics" element={<Analytics />} />
           </Route>
         </Route>
 

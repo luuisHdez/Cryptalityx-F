@@ -33,12 +33,24 @@ export const listeningOperationActivated = (socket, callback) => {
   }
 };
 
+// Escuchar señales de los modelos ML (ml_signal)
+export const listenToSignals = (socket, callback) => {
+  if (socket && socket.on) {
+    socket.off("ml_signal");
+    socket.on("ml_signal", callback);
+    console.log("👂 Listener registrado: ml_signal");
+  } else {
+    console.warn("❌ Socket no disponible o no soporta eventos para listenToSignals");
+  }
+};
+
 // Detener todos los listeners activos
 export const stopListening = (socket) => {
   if (socket && socket.off) {
     socket.off("binance_data");
     socket.off("operation_executed");
-    console.log("🛑 Listeners eliminados: binance_data, operation_executed");
+    socket.off("ml_signal");
+    console.log("🛑 Listeners eliminados: binance_data, operation_executed, ml_signal");
   } else {
     console.warn("❌ Socket no disponible o no soporta eventos para stopListening");
   }
@@ -49,6 +61,7 @@ if (typeof window !== "undefined") {
   window.apiTradeUtils = {
     subscribeToSymbol,
     listenToData,
+    listenToSignals,
     stopListening,
     listeningOperationActivated,
   };

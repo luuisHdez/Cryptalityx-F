@@ -8,28 +8,56 @@ const authApi = axios.create({
     withCredentials: true  // ✅ Permite el uso de cookies en solicitudes cross-site
 });
 
+// Promesa compartida para que múltiples 401 concurrentes no disparen
+// varias llamadas de refresh en paralelo (una sola en vuelo a la vez).
+let refreshPromise = null;
+
 export const refreshToken = async () => {
-    try {
-        const response = await authApi.post('token/refresh/');
-        console.log('Nuevo access token:', response.data);
-        return response.data;
-    } catch (error) {
-        console.error('Error al refrescar token:', error);
-        throw error;
+    if (refreshPromise) {
+        return refreshPromise;
     }
+
+    refreshPromise = authApi.post('token/refresh/')
+        .then(response => {
+            console.log('Nuevo access token:', response.data);
+            return response.data;
+        })
+        .catch(error => {
+            console.error('Error al refrescar token:', error);
+            throw error;
+        })
+        .finally(() => {
+            refreshPromise = null;
+        });
+
+    return refreshPromise;
 };
 
 authApi.interceptors.response.use(
     response => response,
     async error => {
-        if (error.response?.status === 401) {
+        const originalRequest = error.config;
+        const url = originalRequest?.url || '';
+        // Endpoints de auth donde un 401 significa "credenciales inválidas",
+        // NO "token expirado". No se debe intentar refrescar en estos casos.
+        const isAuthEndpoint = ['token/refresh/', 'login/', 'register/', 'logout/']
+            .some(path => url.includes(path));
+
+        // Solo intenta refrescar si:
+        // - es un 401
+        // - la petición que falló NO es de autenticación (evita bucle y errores confusos)
+        // - no se ha reintentado ya esta petición
+        if (error.response?.status === 401 && !isAuthEndpoint && !originalRequest._retry) {
+            originalRequest._retry = true;
             try {
                 await refreshToken();
-                // Reintenta la solicitud original
-                return authApi(error.config);
+                // Reintenta la solicitud original una sola vez
+                return authApi(originalRequest);
             } catch (refreshError) {
                 console.error("Refresh token falló:", refreshError);
-                window.location.href = "/login";
+                if (window.location.pathname !== "/login") {
+                    window.location.href = "/login";
+                }
             }
         }
         return Promise.reject(error);

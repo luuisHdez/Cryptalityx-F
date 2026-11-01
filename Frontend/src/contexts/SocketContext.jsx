@@ -1,5 +1,5 @@
 // src/contexts/SocketContext.jsx
-import React, { createContext, useContext, useEffect, useState } from "react";
+import React, { createContext, useContext, useEffect, useState, useCallback } from "react";
 import { io } from "socket.io-client";
 
 const SocketContext = createContext(null);
@@ -8,17 +8,24 @@ export const SocketProvider = ({ children }) => {
   const [socket] = useState(() =>
     io(`https://${window.location.hostname}:8001`, {
       autoConnect: false,
-      withCredentials: true,   // las cookies HTTP-Only se envían solas
+      withCredentials: true,
       transports: ["websocket"],
+      reconnection: true,
+      reconnectionAttempts: Infinity,
+      reconnectionDelay: 2000,
     })
   );
 
-  useEffect(() => {
+  // Función para conectar el socket manualmente (llamada después de auth)
+  const connectSocket = useCallback(() => {
     if (!socket.connected) {
       socket.connect();
-      console.log("🔌 Socket conectado desde contexto");
+      console.log("🔌 Socket conectando...");
     }
+  }, [socket]);
 
+  useEffect(() => {
+    socket.on("connect", () => console.log("✅ Socket conectado"));
     socket.on("connect_error", (err) => console.error("❌ Error socket:", err));
     socket.on("disconnect", (reason) => console.warn("❌ Desconectado:", reason));
 
@@ -29,7 +36,7 @@ export const SocketProvider = ({ children }) => {
   }, [socket]);
 
   return (
-    <SocketContext.Provider value={{ socket }}>
+    <SocketContext.Provider value={{ socket, connectSocket }}>
       {children}
     </SocketContext.Provider>
   );
